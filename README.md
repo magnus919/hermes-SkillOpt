@@ -12,20 +12,35 @@ SkillOpt's answer: **don't evaluate the text — evaluate the execution.**
 
 SkillOpt uses your Hermes Agent's built-in kanban system to run a six-phase optimization pipeline:
 
-```
-Backlog → Rollout → Reflect → Propose → Validate → Merge → Done
-                                               ↓              ↑
-                                          Reject Buffer ──────┘
-                                           (every 4 epochs)
+```mermaid
+flowchart LR
+    B[Backlog] --> R1[Rollout]
+    R1 --> R2[Reflect]
+    R2 --> P[Propose]
+    P --> V[Validate]
+    V -->|accepted| M[Merge]
+    V -->|rejected| RB[Reject Buffer]
+    RB -.->|every 4 epochs| SM[Slow/Meta]
+    SM -.-> R1
+    M -->|epochs &lt; 4| R1
+    M -->|epochs ≥ 4| SM
+    M --> D[Done ✓]
 ```
 
 Each phase:
-1. **Rollout** — Execute the skill against training tasks
-2. **Reflect** — Identify systematic failure patterns
-3. **Propose** — Generate 1-4 bounded edits
-4. **Validate** — Test each edit against held-out tasks (the gate)
-5. **Merge** — Deploy accepted edits
-6. **Slow/Meta** — Learn from rejected edits every 4 epochs
+
+| Phase | What Happens | Artifact |
+|-------|-------------|----------|
+| **Rollout** | Execute the skill against training tasks | N trajectory records |
+| **Reflect** | Identify systematic failure patterns across rollouts | Reflection document |
+| **Propose** | Generate 1-4 bounded edits to fix failures | Edit proposals |
+| **Validate** | Test each edit against held-out tasks | Accept/reject with metrics |
+| **Merge** | Deploy accepted edits, snapshot, increment epoch | Updated skill |
+| **Slow/Meta** | Learn from the rejected-edit buffer every 4 epochs | Meta-reflection |
+
+### The Validation-Gate Principle
+
+Training and validation task sets MUST be distinct. Edits are only accepted if they demonstrably improve or maintain performance on unseen tasks. This is the non-negotiable methodological requirement.
 
 ## Quick Start
 
@@ -52,6 +67,28 @@ skillopt action=run-phase --board SkillOpt-<name> --phase merge
 - **No new infrastructure** — Uses Hermes Agent's existing kanban system. No additional daemons, databases, or APIs.
 - **Artifact contracts over context retention** — Each phase writes structured JSON to disk. Downstream phases read from disk, not from LLM context.
 - **Model-agnostic** — Works with any LLM you'd normally use with Hermes. Skills optimized on one model transfer to others.
+
+## Repository Structure
+
+```
+hermes-SkillOpt/
+├── SKILL.md                  # The methodology document
+├── README.md                 # This file
+├── AGENTS.md                 # Agent session setup instructions
+├── LICENSE                   # MIT
+├── scripts/
+│   ├── seed-board.sh         # Create kanban board + state directory
+│   ├── run-phase.sh          # Execute any pipeline phase
+│   └── archive-run.sh        # Finalize run and clean up
+├── references/
+│   ├── methodology-guide.md  # Deep rationale for every phase
+│   ├── test-suite-design.md  # How to pick training/validation tasks
+│   ├── artifact-formats.md   # JSON schemas for all phase outputs
+│   └── getting-started.md    # Walkthrough from install to completion
+└── templates/
+    ├── board.json             # Kanban board spec
+    └── test-suite.json        # Test suite JSON schema
+```
 
 ## Research Foundation
 

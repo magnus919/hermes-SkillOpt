@@ -4,23 +4,22 @@ set -euo pipefail
 # seed-board.sh — Create a SkillOpt kanban board for a target skill
 #
 # Usage:
-#   seed-board.sh --target SKILL.md --training N --validation N [--budget N]
-#
-# Prerequisites:
-#   - Hermes Agent CLI on PATH
-#   - Kanban system available (hermes kanban boards)
-#
-# Example:
 #   seed-board.sh \
-#     --target ~/.hermes/skills/content/hugo-blog/SKILL.md \
-#     --training 5 \
-#     --validation 5
+#     --target SKILL.md \
+#     --training N \
+#     --validation N \
+#     [--train-tasks-file tasks.json] \
+#     [--val-tasks-file tasks.json] \
+#     [--budget N]
+#
+# If --*-tasks-file is provided, those tasks are loaded into the board.
+# If omitted, generic task placeholders are created for manual editing.
 
 SKILLOPT_DIR="${SKILLOPT_DIR:-$HOME/.hermes/SkillOpt}"
 HERMES="${HERMES:-hermes}"
 
 show_usage() {
-    sed -n '3,10p' "$0"
+    sed -n '3,18p' "$0"
     exit 1
 }
 
@@ -28,6 +27,8 @@ show_usage() {
 TARGET=""
 TRAINING_COUNT=""
 VALIDATION_COUNT=""
+TRAIN_FILE=""
+VAL_FILE=""
 EDIT_BUDGET=4
 
 while [[ $# -gt 0 ]]; do
@@ -35,6 +36,8 @@ while [[ $# -gt 0 ]]; do
         --target) TARGET="$2"; shift 2 ;;
         --training) TRAINING_COUNT="$2"; shift 2 ;;
         --validation) VALIDATION_COUNT="$2"; shift 2 ;;
+        --train-tasks-file) TRAIN_FILE="$2"; shift 2 ;;
+        --val-tasks-file) VAL_FILE="$2"; shift 2 ;;
         --budget) EDIT_BUDGET="$2"; shift 2 ;;
         --help|-h) show_usage ;;
         *) echo "Unknown option: $1"; show_usage ;;
@@ -54,24 +57,115 @@ if [[ ! -f "$TARGET" ]]; then
     exit 1
 fi
 
-# Extract the skill name from the target path
 SKILL_NAME="$(basename "$(dirname "$TARGET")")"
 BOARD_SLUG="SkillOpt-${SKILL_NAME}"
 
-# Check if this board already exists
 if "$HERMES" kanban boards list 2>/dev/null | grep -q "$BOARD_SLUG"; then
     echo "ERROR: Board '$BOARD_SLUG' already exists for skill '$SKILL_NAME'."
     echo "Run 'archive-run.sh' first to finalize the existing run."
     exit 1
 fi
 
-# --- Setup ---
+# --- Load task definitions ---
+
+load_tasks_json() {
+    local file="$1"
+    if [[ ! -f "$file" ]]; then
+        echo "ERROR: Task file not found: $file"
+        exit 1
+    fi
+    python3 -c "
+import json, sys
+tasks = json.load(open(sys.argv[1]))
+if not isinstance(tasks, list):
+    print('ERROR: Task file must be a JSON array of task objects', file=sys.stderr)
+    sys.exit(1)
+for i, t in enumerate(tasks):
+    if 'instruction' not in t:
+        print(f'ERROR: Task {i} missing \"instruction\" field', file=sys.stderr)
+        sys.exit(1)
+print(json.dumps(tasks))
+" "$file"
+}
+
+TRAIN_TASKS=""
+VAL_TASKS=""
+
+if [[ -n "$TRAIN_FILE" ]]; then
+    TRAIN_TASKS=$(load_tasks_json "$TRAIN_FILE")
+    TRAINING_COUNT=$(echo "$TRAIN_TASKS" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
+    echo "Loaded $TRAINING_COUNT training tasks from: $TRAIN_FILE"
+fi
+
+if [[ -n "$VAL_FILE" ]]; then
+    VAL_TASKS=$(load_tasks_json "$VAL_FILE")
+    VALIDATION_COUNT=$(echo "$VAL_TASKS" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
+    echo "Loaded $VALIDATION_COUNT validation tasks from: $VAL_FILE"
+fi
+
+# --- Setup state directory ---
 
 mkdir -p "$SKILLOPT_DIR/$SKILL_NAME"/{rollouts,reflections,proposals,validation-results,snapshots}
 
-# Baseline snapshot
 SNAPSHOT_FILE="baseline-$(date +%Y%m%d-%H%M%S).md"
 cp "$TARGET" "$SKILLOPT_DIR/$SKILL_NAME/snapshots/$SNAPSHOT_FILE"
+
+# Write test suite definition
+TEST_SUITE_FILE="$SKILLOPT_DIR/$SKILL_NAME/test-suite.json"
+
+# Generate generic tasks if not provided
+if [[ -z "$TRAIN_TASKS" ]]; then
+    TRAIN_TASKS=$(python3 -c "
+import json
+tasks = []
+for i in range($TRAINING_COUNT):
+    tasks.append({
+        'id': f'train-{i+1}',
+        'instruction': f'Training task {i+1} — Execute the skill against this task and record the outcome',
+        'tags': ['training']
+    })
+print(json.dumps(tasks))
+")
+fi
+
+if [[ -z "$VAL_TASKS" ]]; then
+    VAL_TASKS=$(python3 -c "
+import json
+tasks = []
+for i in range($VALIDATION_COUNT):
+    tasks.append({
+        'id': f'val-{i+1}',
+        'instruction': f'Validation task {i+1} — Execute the skill against this held-out task and record the outcome',
+        'tags': ['validation']
+    })
+print(json.dumps(tasks))
+")
+fi
+
+python3 -c "
+import json
+suite = {
+    'training': json.loads('''$TRAIN_TASKS'''),
+    'validation': json.loads('''$VAL_TASKS'''),
+    'created_at': '$(date -u +%Y-%m-%dT%H:%M:%SZ)',
+    'skill_target': '$TARGET'
+}
+open('$TEST_SUITE_FILE', 'w').write(json.dumps(suite, indent=2))
+" 2>/dev/null || {
+    # Fallback: write via heredoc-compatible approach
+    python3 << 'PYEOF'
+import json, os
+suite = {
+    "training": json.loads(os.environ.get("TRAIN_TASKS_JSON", "[]")),
+    "validation": json.loads(os.environ.get("VAL_TASKS_JSON", "[]")),
+    "created_at": os.environ.get("CREATED_AT", ""),
+    "skill_target": os.environ.get("TARGET_PATH", "")
+}
+open(os.environ["SUITE_PATH"], "w").write(json.dumps(suite, indent=2))
+PYEOF
+}
+
+echo "Test suite written: $TEST_SUITE_FILE"
 
 # Board metadata
 cat > "$SKILLOPT_DIR/$SKILL_NAME/board-metadata.json" << EOF
@@ -91,6 +185,7 @@ EOF
 
 # --- Create kanban board ---
 
+echo ""
 echo "Creating board: $BOARD_SLUG for skill: $SKILL_NAME"
 
 "$HERMES" kanban boards create "$BOARD_SLUG" \
@@ -98,31 +193,50 @@ echo "Creating board: $BOARD_SLUG for skill: $SKILL_NAME"
     --labels "phase:rollout,phase:reflect,phase:propose,phase:validate,phase:merge,phase:slow-meta,status:in-progress,status:pending-validation,status:accepted,status:rejected"
 
 # Create Phase 1 rollout tasks
-for i in $(seq 1 "$TRAINING_COUNT"); do
-    TASK_BODY="Rollout task $i of $TRAINING_COUNT for '$SKILL_NAME' (epoch 1).
+echo "$TRAIN_TASKS" | python3 -c "
+import json, sys
+tasks = json.load(sys.stdin)
+for i, task in enumerate(tasks):
+    desc = task.get('instruction', f'Training task {i+1}')
+    task_id = task.get('id', f'train-{i+1}')
+    print(f'TASK:{task_id}')
+    print(f'DESC:{desc}')
+" | while IFS= read -r line; do
+    case "$line" in
+        TASK:*) CURRENT_TASK="${line#TASK:}";;
+        DESC:*) 
+            DESC="${line#DESC:}"
+            TASK_BODY="Rollout task ${CURRENT_TASK} for '$SKILL_NAME' (epoch 1).
 
-State: $SKILLOPT_DIR/$SKILL_NAME/rollouts/epoch-1-task-$i.json
+State: $SKILLOPT_DIR/$SKILL_NAME/rollouts/epoch-1-${CURRENT_TASK}.json
 
-Execute the skill at $TARGET against training task $i.
+Task: ${DESC}
+
+Execute the skill at $TARGET against this task.
 Record: task description, execution trace, outcome (success/failure), and any observed failure modes.
-Output: JSON to the state path above."
-    
-    echo "$TASK_BODY" | "$HERMES" kanban create "$BOARD_SLUG" \
-        --column "Rollout" \
-        --title "Rollout: training task $i" \
-        --label "phase:rollout"
+Output: JSON following the rollout record schema in references/artifact-formats.md"
+            
+            echo "$TASK_BODY" | "$HERMES" kanban create "$BOARD_SLUG" \
+                --column "Rollout" \
+                --title "Rollout: ${CURRENT_TASK}" \
+                --label "phase:rollout"
+            ;;
+    esac
 done
 
-# Create a Validation task stub
+# Create Validation baseline task
 "$HERMES" kanban create "$BOARD_SLUG" \
     --column "Backlog" \
     --title "Validation: establish baseline metrics" \
     --label "status:pending-validation" \
-    --body "Run the $VALIDATION_COUNT validation tasks with the current skill at $TARGET. Record metrics as the baseline for future comparison."
+    --body "Run the $VALIDATION_COUNT validation tasks (defined in $TEST_SUITE_FILE) with the current skill at $TARGET. Record metrics as the baseline for future comparison.
+
+State: $SKILLOPT_DIR/$SKILL_NAME/validation-results/baseline.json"
 
 echo ""
 echo "Board created: $BOARD_SLUG"
 echo "State directory: $SKILLOPT_DIR/$SKILL_NAME/"
 echo "Baseline snapshot: $SNAPSHOT_FILE"
+echo "Test suite: $TEST_SUITE_FILE"
 echo ""
 echo "Next: run-phase.sh --board $BOARD_SLUG --phase rollout --epoch 1"
