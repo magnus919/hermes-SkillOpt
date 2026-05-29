@@ -1,0 +1,19 @@
+{
+    "$schema": "https://json-schema.org/draft-07/schema#",
+    "title": "SkillOpt Board Metadata",
+    "description": "Metadata for a single SkillOpt optimization run",
+    "type": "object",
+    "required": ["target", "skill_name", "board_slug", "training_count", "validation_count", "edit_budget", "epoch", "created_at", "baseline_snapshot", "status"],
+    "properties": {
+        "target": {"type": "string", "description": "Absolute path to the target SKILL.md"},
+        "skill_name": {"type": "string", "description": "Name of the skill being optimized"},
+        "board_slug": {"type": "string", "pattern": "^SkillOpt-", "description": "Kanban board slug"},
+        "training_count": {"type": "integer", "minimum": 1},
+        "validation_count": {"type": "integer", "minimum": 1},
+        "edit_budget": {"type": "integer", "default": 4, "minimum": 1, "maximum": 16},
+        "epoch": {"type": "integer", "minimum": 1},
+        "created_at": {"type": "string", "format": "date-time"},
+        "baseline_snapshot": {"type": "string", "description": "Filename of the baseline snapshot"},
+        "status": {"type": "string", "enum": ["active", "completed", "archived"]}
+    }
+}
