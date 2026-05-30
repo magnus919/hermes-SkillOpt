@@ -23,7 +23,7 @@ SkillOpt is a methodology skill that any Hermes Agent can load to run controlled
 
 When a user says they want to optimize a skill:
 
-1. Load this skill with `skill_view(name='SkillOpt')` to access the methodology
+1. Load this skill with `skill_view(name='skillopt')` to access the methodology
 2. Guide the user through defining 3-5 training and 3-5 validation tasks
 3. Call `hermes kanban boards create` with the proper columns and labels
 4. Run each phase: rollouts via `hermes oneshot`, reflections by reviewing artifacts, proposals by analyzing failure patterns, validation by comparing before/after metrics

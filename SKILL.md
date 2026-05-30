@@ -116,7 +116,7 @@ The edit budget is configurable in `board-metadata.json` under `edit_budget`.
    I want to optimize my vault-note skill.
    ```
 
-3. The agent loads this skill via `skill_view(name='SkillOpt')`, guides you through defining training and validation tasks, seeds the kanban board, and orchestrates the six-phase pipeline — reporting results at each stage.
+3. The agent loads this skill via `skill_view(name='skillopt')`, guides you through defining training and validation tasks, seeds the kanban board, and orchestrates the six-phase pipeline — reporting results at each stage.
 
 ## Scripts — Power Users Only
 
