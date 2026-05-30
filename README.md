@@ -44,10 +44,10 @@ Training and validation task sets MUST be distinct. Edits are only accepted if t
 
 ## Quick Start
 
-1. **One-time install** — clone into your Hermes skills directory:
+1. **One-time install** — add the repo as a skill tap and install:
    ```bash
-   git clone https://github.com/magnus919/hermes-SkillOpt \
-     ~/.hermes/skills/skillopt/SkillOpt
+   hermes skills tap add magnus919/hermes-SkillOpt
+   hermes skills install magnus919/hermes-SkillOpt --category skillopt
    ```
 
 2. **Start a conversation** with your Hermes Agent and tell it what you want:
@@ -55,7 +55,7 @@ Training and validation task sets MUST be distinct. Edits are only accepted if t
    I want to optimize my vault-note skill using SkillOpt
    ```
 
-   The agent loads the SkillOpt methodology, works with you to define a test suite, and orchestrates the full optimization pipeline — no shell commands needed after install.
+   The agent loads the SkillOpt methodology, works with you to define a test suite, and orchestrates the full optimization pipeline.
 
 ## Design Philosophy
 

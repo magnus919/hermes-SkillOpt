@@ -4,31 +4,31 @@
 
 SkillOpt is a methodology skill that any Hermes Agent can load to run controlled optimization cycles on any skill document. It uses the built-in kanban system as its execution substrate.
 
-## Where Things Live
+## Where It Lives
 
-After install, the skill lives at:
-- `~/.hermes/skills/skillopt/SkillOpt/`
-
-Per-target state directories go in `~/.hermes/SkillOpt/<skill-name>/`.
-
-## Skills to Load When Working on This Project
-
-| Task | Load This Skill |
-|------|-----------------|
-| Modifying the methodology | `plan` (read-only mode for methodology changes) |
-| Adding scripts | `terminal` (shell scripting patterns) |
-| Creating references | Any content authoring skill |
-| Releasing to GitHub | `github-pr-workflow`, `opensource-contributions` |
+- Skill: `~/.hermes/skills/skillopt/SkillOpt/`
+- Per-target state: `~/.hermes/SkillOpt/<skill-name>/`
 
 ## Key Files
 
-- `SKILL.md` — The methodology document. Any changes here affect what users and agents see when they load the skill.
-- `scripts/seed-board.sh` — Board creation and state initialization
-- `scripts/run-phase.sh` — Unified phase runner
-- `scripts/archive-run.sh` — Run completion and cleanup
+- `SKILL.md` — The methodology document. Changes affect what users and agents see when loading the skill.
+- `scripts/seed-board.sh` — Board creation (power-user CLI alternative)
+- `scripts/run-phase.sh` — Phase execution (power-user CLI alternative)
+- `scripts/archive-run.sh` — Run cleanup (power-user CLI alternative)
 - `references/methodology-guide.md` — Deep research rationale
 - `references/test-suite-design.md` — Task selection guidance
 - `references/artifact-formats.md` — JSON schemas for all phase outputs
+
+## How to Use This Skill in a Conversation
+
+When a user says they want to optimize a skill:
+
+1. Load this skill with `skill_view(name='SkillOpt')` to access the methodology
+2. Guide the user through defining 3-5 training and 3-5 validation tasks
+3. Call `hermes kanban boards create` with the proper columns and labels
+4. Run each phase: rollouts via `hermes oneshot`, reflections by reviewing artifacts, proposals by analyzing failure patterns, validation by comparing before/after metrics
+5. Apply accepted edits to the target skill file
+6. Report results conversationally
 
 ## File Conventions
 

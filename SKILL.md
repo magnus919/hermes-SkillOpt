@@ -4,15 +4,13 @@ description: Run controlled skill optimization cycles on any skill document. Use
 version: 1.0.0-alpha
 author: Jasper (on behalf of Magnus Hedemark)
 license: MIT
-compatibility: Compatible with any agent supporting the Agent Skills format (Hermes Agent, Claude Code, GitHub Copilot, OpenCode, Cursor, etc.)
+compatibility: Hermes Agent only — uses hermes kanban and hermes oneshot — not compatible with Claude Code, Copilot, OpenCode, or Cursor
 platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [optimization, skills, kanban, methodology, validation, agent-skills]
     related_skills: [kanban-orchestrator, kanban-worker, plan]
     requires_toolsets: [terminal, kanban]
-    lifecycle:
-      on_first_load: "Check if ~/.hermes/SkillOpt/ exists — if not, offer to create it."
 source_repo: "https://github.com/magnus919/hermes-SkillOpt"
 ---
 
@@ -107,9 +105,10 @@ The edit budget is configurable in `board-metadata.json` under `edit_budget`.
 
 ## Quick Start
 
-1. **One-time install** — clone this repo into your Hermes skills directory:
+1. **One-time install** — add the repo as a skill tap and install:
    ```bash
-   git clone https://github.com/magnus919/hermes-SkillOpt ~/.hermes/skills/skillopt/SkillOpt
+   hermes skills tap add magnus919/hermes-SkillOpt
+   hermes skills install magnus919/hermes-SkillOpt --category skillopt
    ```
 
 2. **In a conversation** with your agent, say something like:
@@ -117,17 +116,17 @@ The edit budget is configurable in `board-metadata.json` under `edit_budget`.
    I want to optimize my vault-note skill.
    ```
 
-   The agent loads this skill via `skill_view(name='SkillOpt')`, guides you through defining training and validation tasks, seeds the kanban board, and orchestrates the six-phase pipeline — reporting results at each stage.
+3. The agent loads this skill via `skill_view(name='SkillOpt')`, guides you through defining training and validation tasks, seeds the kanban board, and orchestrates the six-phase pipeline — reporting results at each stage.
 
-## Scripts
+## Scripts — Power Users Only
 
-These scripts exist to support agent-driven execution. The agent invokes them behind the scenes when running pipeline phases. Power users can also invoke them directly, but the primary interface is conversational.
+The primary interface for SkillOpt is conversational — your agent drives the pipeline. These shell scripts exist for power users who want to run phases from the command line instead. The agent ignores them and uses `hermes oneshot` + `hermes kanban` directly.
 
-| Script | Purpose | Called by agent when... |
-|--------|---------|------------------------|
-| `scripts/seed-board.sh` | Create kanban board, state directory, baseline snapshot | User agrees to a defined test suite |
-| `scripts/run-phase.sh` | Execute a single pipeline phase (rollout/reflect/propose/validate/merge/slow-meta) | Agent runs `--exec` mode for each phase |
-| `scripts/archive-run.sh` | Finalize a run, store metrics, clean up the board | User confirms the optimization is complete |
+| Script | What it does | 
+|--------|-------------|
+| `scripts/seed-board.sh` | Create kanban board, state directory, baseline snapshot |
+| `scripts/run-phase.sh` | Execute a single pipeline phase (rollout/reflect/propose/validate/merge/slow-meta) |
+| `scripts/archive-run.sh` | Finalize a run, store metrics, clean up the board |
 
 ## References
 
@@ -136,7 +135,6 @@ These scripts exist to support agent-driven execution. The agent invokes them be
 | `references/methodology-guide.md` | Deep rationale for every phase — why each exists, what failure it prevents, the research it's based on |
 | `references/test-suite-design.md` | How to pick training and validation tasks for different skill types |
 | `references/artifact-formats.md` | JSON schemas for every intermediate artifact across all phases |
-| `references/getting-started.md` | Walkthrough from a fresh Hermes install to a completed optimization run |
 
 ## Templates
 
