@@ -14,6 +14,7 @@ set -euo pipefail
 
 SKILLOPT_DIR="${SKILLOPT_DIR:-$HOME/.hermes/SkillOpt}"
 HERMES="${HERMES:-hermes}"
+ERROR_LOG="${SKILLOPT_DIR}/hermes-oneshot-errors.log"
 
 show_usage() {
     sed -n '3,14p' "$0"
@@ -146,7 +147,7 @@ Output ONLY a JSON object with these fields:
 - output_summary: string"
 
             local result
-            result=$("$HERMES" oneshot -z -m "$prompt" 2>/dev/null || echo '{"outcome": "failure", "failure_modes": ["execution error"], "output_summary": "oneshot command failed"}')
+            result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"outcome": "failure", "failure_modes": ["execution error"], "output_summary": "oneshot command failed"}')
 
             # Try to extract JSON from the response
             echo "$result" | python3 -c "
@@ -164,9 +165,11 @@ print(f'    Wrote: $output_file')
 
         # Re-count
         completed=0
-        for f in "$rollout_dir/epoch-$EPOCH-"*.json; do
-            [[ -f "$f" ]] && completed=$((completed + 1))
-        done
+        if ls "$rollout_dir/epoch-$EPOCH-"*.json &>/dev/null; then
+            for f in "$rollout_dir/epoch-$EPOCH-"*.json; do
+                [[ -f "$f" ]] && completed=$((completed + 1))
+            done
+        fi
         echo ""
         echo "Rollout complete: $completed records written."
     else
@@ -252,7 +255,7 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" oneshot -z -m "$prompt" 2>/dev/null || echo '{"error": "execution failed"}')
+        result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
@@ -328,7 +331,7 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" oneshot -z -m "$prompt" 2>/dev/null || echo '{"error": "execution failed"}')
+        result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
@@ -710,7 +713,7 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" oneshot -z -m "$prompt" 2>/dev/null || echo '{"error": "execution failed"}')
+        result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
