@@ -1,29 +1,21 @@
 {
     "$schema": "https://json-schema.org/draft-07/schema#",
-    "title": "Test Suite Definition",
-    "description": "Describes a set of training or validation tasks for a SkillOpt run",
+    "title": "SkillOpt Combined Test Suite",
+    "description": "Combined training and validation task definitions for a SkillOpt optimization run. seed-board.sh produces this format (not the per-type split schema).",
     "type": "object",
-    "required": ["type", "tasks"],
+    "required": ["training", "validation", "created_at", "skill_target"],
     "properties": {
-        "type": {
-            "type": "string",
-            "enum": ["training", "validation"],
-            "description": "Whether this is a training or validation suite"
-        },
-        "skill_target": {
-            "type": "string",
-            "description": "Path to the skill being tested"
-        },
-        "tasks": {
+        "training": {
             "type": "array",
             "minItems": 1,
+            "description": "Training tasks — used to generate rollout trajectories and identify failure patterns",
             "items": {
                 "type": "object",
-                "required": ["id", "instruction", "success_criteria"],
+                "required": ["id", "instruction"],
                 "properties": {
-                    "id": {"type": "string", "description": "Unique task identifier"},
-                    "instruction": {"type": "string", "description": "What the LLM should do"},
-                    "input_data": {"type": "string", "description": "Optional input to the task"},
+                    "id": {"type": "string", "description": "Unique task identifier (e.g. 'train-1')"},
+                    "instruction": {"type": "string", "description": "What the LLM should execute"},
+                    "input_data": {"type": "string", "description": "Optional input data for the task"},
                     "expected_outcome": {"type": "string", "description": "What success looks like"},
                     "success_criteria": {"type": "string", "description": "How to evaluate the output"},
                     "tags": {
@@ -33,6 +25,36 @@
                     }
                 }
             }
+        },
+        "validation": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Held-out validation tasks — used to test edits. Must be distinct from training tasks.",
+            "items": {
+                "type": "object",
+                "required": ["id", "instruction"],
+                "properties": {
+                    "id": {"type": "string", "description": "Unique task identifier (e.g. 'val-1')"},
+                    "instruction": {"type": "string", "description": "What the LLM should execute"},
+                    "input_data": {"type": "string", "description": "Optional input data"},
+                    "expected_outcome": {"type": "string", "description": "What success looks like"},
+                    "success_criteria": {"type": "string", "description": "How to evaluate the output"},
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Tags for categorizing tasks"
+                    }
+                }
+            }
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp of test suite creation"
+        },
+        "skill_target": {
+            "type": "string",
+            "description": "Absolute path to the target SKILL.md file"
         }
     }
 }

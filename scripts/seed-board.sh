@@ -143,16 +143,31 @@ print(json.dumps(tasks))
 ")
 fi
 
+# Write test suite definition — write JSON to temp files to avoid injection in triple-quoted strings
+TEST_SUITE_FILE="$SKILLOPT_DIR/$SKILL_NAME/test-suite.json"
+local tmp_train
+tmp_train=$(mktemp)
+local tmp_val
+tmp_val=$(mktemp)
+echo "$TRAIN_TASKS" > "$tmp_train"
+echo "$VAL_TASKS" > "$tmp_val"
+
 python3 -c "
 import json
+with open('$tmp_train') as f:
+    training = json.load(f)
+with open('$tmp_val') as f:
+    validation = json.load(f)
 suite = {
-    'training': json.loads('''$TRAIN_TASKS'''),
-    'validation': json.loads('''$VAL_TASKS'''),
+    'training': training,
+    'validation': validation,
     'created_at': '$(date -u +%Y-%m-%dT%H:%M:%SZ)',
     'skill_target': '$TARGET'
 }
 open('$TEST_SUITE_FILE', 'w').write(json.dumps(suite, indent=2))
 "
+
+rm -f "$tmp_train" "$tmp_val"
 
 echo "Test suite written: $TEST_SUITE_FILE"
 
@@ -197,21 +212,25 @@ for i, task in enumerate(tasks):
     case "$line" in
         TASK:*) CURRENT_TASK="${line#TASK:}";;
         DESC:*)
-            DESC="${line#DESC:}"
-            BODY="Rollout task ${CURRENT_TASK} for '$SKILL_NAME' (epoch 1).
+            local body_file
+            body_file=$(mktemp)
+            cat > "$body_file" << BODYEOF
+Rollout task ${CURRENT_TASK} for '${SKILL_NAME}' (epoch 1).
 
-State: $SKILLOPT_DIR/$SKILL_NAME/rollouts/epoch-1-${CURRENT_TASK}.json
+State: ${SKILLOPT_DIR}/${SKILL_NAME}/rollouts/epoch-1-${CURRENT_TASK}.json
 
 Task: ${DESC}
 
-Execute the skill at $TARGET against this task.
+Execute the skill at ${TARGET} against this task.
 Record: task description, execution trace, outcome (success/failure), and any observed failure modes.
-Output: JSON following the rollout record schema in references/artifact-formats.md"
+Output: JSON following the rollout record schema in references/artifact-formats.md
+BODYEOF
 
             "$HERMES" kanban create "Rollout: ${CURRENT_TASK}" \
-                --body "$BODY" \
+                --body "$(cat "$body_file")" \
                 --priority 3 \
                 --created-by "skillopt"
+            rm -f "$body_file"
             ;;
     esac
 done

@@ -95,13 +95,14 @@ The optimizer reflects on the accumulated rejected-edit buffer — all proposals
 
 ### Epoch Structure and Edit Budget
 
-A full optimization run consists of 4 epochs by default. Each epoch follows the Rollout → Reflect → Propose → Validate → Merge cycle.
+A full optimization run consists of up to 4 epochs by default. Each epoch follows the Rollout → Reflect → Propose → Validate → Merge cycle.
 
-- **Default edit budget:** 4 edits per epoch (matching the paper's optimal Lt=4)
-- **Budget decay:** Cosine decay to a floor of 2 edits per epoch
-- **Epoch 4 or plateau:** Trigger the slow-meta phase
+- **Default starting edit budget:** 4 edits per epoch (matching the paper's optimal Lt=4)
+- **Budget decay:** Cosine decay applied after each merge, reducing the budget toward a floor of 2 edits. The decay formula is: `budget = floor + (initial - floor) × (1 + cos(π × t / max_epochs)) / 2` where `t` is the current epoch.
+- **Plateau detection:** After each merge, validation pass rates are tracked in `board-metadata.json` under `pass_rate_history`. If pass rates show no improvement over 3 consecutive epochs, the slow-meta phase is triggered early — before reaching epoch 4. Epoch 4 always triggers the slow-meta phase regardless of pass rate trends.
+- **Early termination:** If the slow-meta phase recommends archiving, the run can be ended before epoch 4. If it recommends continuing, a new epoch cycle begins at the current decayed budget level.
 
-The edit budget is configurable in `board-metadata.json` under `edit_budget`.
+The edit budget is configurable in `board-metadata.json` under `edit_budget`. The `compute_budget()` function in `scripts/run-phase.sh` handles the cosine decay calculation automatically.
 
 ## Quick Start
 
@@ -164,7 +165,7 @@ The primary interface for SkillOpt is conversational — your agent drives the p
 
 - **Unbounded edits.** An optimizer that can rewrite the entire skill will introduce skill drift — removing working patterns while trying to fix failures. The bounded-edit strategy exists for this reason.
 
-- **Running epochs without plateau detection.** After 4 epochs, if the validation metric isn't improving, you've reached a plateau. Continuing to run epochs past this point wastes compute and risks overfitting. The slow-meta phase exists to handle this.
+- **Ignoring the slow-meta recommendation.** After epoch 4 or when plateau detection triggers (no pass rate improvement over 3 consecutive epochs), the slow-meta phase recommends either continuing or archiving. If it recommends archiving, continuing to run epochs wastes compute and risks overfitting. The scripts will guide the user to slow-meta automatically — follow the recommendation.
 
 - **Combined code + skill fixes:** Epoch 2 of the GroktoCrawl optimization demonstrated a two-layer fix: a code bug (CLI parsing) and a skill documentation gap (missing browser fallback guidance). When validation consistently fails on one task type (e.g., all search tasks), check for a tool bug BEFORE proposing skill edits. Fix the tool, re-run validation, then observe whether the skill edits meaningfully changed outcomes. The tool bug fix may resolve the validation failures independently — the skill edit adds long-term user guidance, not correctness.
 

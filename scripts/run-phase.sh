@@ -14,6 +14,26 @@ set -euo pipefail
 
 SKILLOPT_DIR="${SKILLOPT_DIR:-$HOME/.hermes/SkillOpt}"
 HERMES="${HERMES:-hermes}"
+ERROR_LOG="${SKILLOPT_DIR}/hermes-oneshot-errors.log"
+
+# Cosine-decayed edit budget computation
+# Budget decreases from initial to floor over max_epochs
+compute_budget() {
+    local epoch="$1"
+    local initial="$2"
+    local floor="${3:-2}"
+    local max_epochs="${4:-4}"
+    python3 -c "
+import math
+e = int($epoch)
+init = int($initial)
+fl = int($floor)
+max_e = int($max_epochs)
+t = min(e, max_e) / max_e
+budget = int(fl + (init - fl) * (1 + math.cos(math.pi * t)) / 2)
+print(max(budget, fl))
+"
+}
 
 show_usage() {
     sed -n '3,14p' "$0"
@@ -146,7 +166,7 @@ Output ONLY a JSON object with these fields:
 - output_summary: string"
 
             local result
-            result=$("$HERMES" oneshot -z -m "$prompt" 2>/dev/null || echo '{"outcome": "failure", "failure_modes": ["execution error"], "output_summary": "oneshot command failed"}')
+            result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"outcome": "failure", "failure_modes": ["execution error"], "output_summary": "oneshot command failed"}')
 
             # Try to extract JSON from the response
             echo "$result" | python3 -c "
@@ -164,9 +184,11 @@ print(f'    Wrote: $output_file')
 
         # Re-count
         completed=0
-        for f in "$rollout_dir/epoch-$EPOCH-"*.json; do
-            [[ -f "$f" ]] && completed=$((completed + 1))
-        done
+        if ls "$rollout_dir/epoch-$EPOCH-"*.json &>/dev/null; then
+            for f in "$rollout_dir/epoch-$EPOCH-"*.json; do
+                [[ -f "$f" ]] && completed=$((completed + 1))
+            done
+        fi
         echo ""
         echo "Rollout complete: $completed records written."
     else
@@ -252,7 +274,7 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" oneshot -z -m "$prompt" 2>/dev/null || echo '{"error": "execution failed"}')
+        result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
@@ -328,7 +350,7 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" oneshot -z -m "$prompt" 2>/dev/null || echo '{"error": "execution failed"}')
+        result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
@@ -386,14 +408,34 @@ suite = json.load(open('$TEST_SUITE'))
 print(json.dumps(suite.get('validation', []), indent=2))
 ")
 
-        # For each proposal, apply and test
+        # For each proposal, apply and test — write data to temp files, pass paths via env vars
+        local tmp_proposals
+        tmp_proposals=$(mktemp)
+        local tmp_skill
+        tmp_skill=$(mktemp)
+        local tmp_val
+        tmp_val=$(mktemp)
+        echo "$proposals" > "$tmp_proposals"
+        echo "$skill_content" > "$tmp_skill"
+        echo "$val_tasks" > "$tmp_val"
+        export PROPOSALS_FILE="$tmp_proposals"
+        export SKILL_FILE="$tmp_skill"
+        export VAL_TASKS_FILE="$tmp_val"
+        export EPOCH_VAL="$EPOCH"
+        export TARGET_PATH="$TARGET"
+        export VAL_DIR="$STATE_DIR/validation-results"
+
         python3 << 'PYEOF'
 import json, os, subprocess, sys
 
-proposals = json.loads(os.environ.get('PROPOSALS_JSON', '{}'))
-skill_content = os.environ.get('SKILL_CONTENT', '')
-val_tasks = json.loads(os.environ.get('VAL_TASKS_JSON', '[]'))
-epoch = os.environ.get('EPOCH', '1')
+# Read from temp files (avoids env var size limits for large JSON)
+with open(os.environ['PROPOSALS_FILE']) as f:
+    proposals = json.load(f)
+with open(os.environ['SKILL_FILE']) as f:
+    skill_content = f.read()
+with open(os.environ['VAL_TASKS_FILE']) as f:
+    val_tasks = json.load(f)
+epoch = os.environ.get('EPOCH_VAL', '1')
 target = os.environ.get('TARGET_PATH', '')
 val_dir = os.environ.get('VAL_DIR', '')
 
@@ -404,8 +446,8 @@ for i, edit in enumerate(edits):
     edit_id = edit.get('id', f'edit-{i+1}')
     edit_type = edit.get('type', 'replace')
     location = edit.get('location', '')
-    old_text = edit.get('old_text', '')
-    new_text = edit.get('new_text', '')
+    old_text = edit.get('old_text') or ''
+    new_text = edit.get('new_text') or ''
 
     # Apply edit to a copy of the skill
     edited_skill = skill_content
@@ -495,7 +537,10 @@ if rejected > 0:
         json.dump(buffer, f, indent=2)
     print(f"  Rejected edits appended to: {buffer_file}")
 PYEOF
-    else:
+
+        # Clean up temp files
+        rm -f "$tmp_proposals" "$tmp_skill" "$tmp_val"
+    else
         echo "To run validation, use --exec or:"
         echo "  1. Create a copy of the target skill"
         echo "  2. Apply each proposed edit to the copy"
@@ -527,8 +572,13 @@ run_merge() {
     fi
 
     if [[ "$EXEC" == true ]]; then
+        export EPOCH="$EPOCH"
+        export TARGET_PATH="$TARGET"
+        export VAL_DIR="$STATE_DIR/validation-results"
+        export SNAPSHOTS_DIR="$STATE_DIR/snapshots"
+        export STATE_DIR="$STATE_DIR"
         python3 << 'PYEOF'
-import json, os, glob
+import json, os, glob, datetime
 
 epoch = os.environ.get('EPOCH', '1')
 target = os.environ.get('TARGET_PATH', '')
@@ -594,24 +644,78 @@ with open(target, 'w') as f:
 print(f"  Merged: {accepted} edits, {rejected} rejected")
 print(f"  Snapshot saved: {snapshot}")
 
-# Update metadata epoch counter
+# Update metadata epoch counter and pass rate history
 meta_file = os.path.join(state_dir, 'board-metadata.json')
 meta = json.load(open(meta_file))
 meta['epoch'] = int(epoch) + 1
-meta['last_merged_at'] = os.popen('date -u +%Y-%m-%dT%H:%M:%SZ').read().strip()
+meta['last_merged_at'] = datetime.datetime.utcnow().isoformat() + 'Z'
+# Record pass rate for plateau detection
+total_val = accepted + rejected
+pass_rate = round(accepted / total_val, 2) if total_val > 0 else 0.0
+if 'pass_rate_history' not in meta:
+    meta['pass_rate_history'] = []
+meta['pass_rate_history'].append({"epoch": int(epoch), "pass_rate": pass_rate, "accepted": accepted, "rejected": rejected})
 with open(meta_file, 'w') as f:
     json.dump(meta, f, indent=2)
 print(f"  Epoch incremented to: {int(epoch) + 1}")
+print(f"  Pass rate for epoch {epoch}: {pass_rate}")
 PYEOF
 
         local next_epoch=$((EPOCH + 1))
+
+        # Plateau detection with budget decay
         if [[ "$EPOCH" -ge 4 ]]; then
+            # Compute budget for next epoch (cosine decay)
+            local initial_budget
+            initial_budget=$(python3 -c "import json; print(json.load(open('$STATE_DIR/board-metadata.json'))['edit_budget'])")
+            local new_budget
+            new_budget=$(compute_budget "$next_epoch" "$initial_budget")
+            python3 -c "
+import json
+meta = json.load(open('$STATE_DIR/board-metadata.json'))
+meta['edit_budget'] = $new_budget
+json.dump(meta, open('$STATE_DIR/board-metadata.json', 'w'), indent=2)
+"
+            echo "  Budget for epoch $next_epoch: $new_budget edits"
             echo ""
-            echo "Epoch $EPOCH reached. Triggering slow-meta phase."
+            echo "Epoch $EPOCH reached plateau threshold. Triggering slow-meta phase."
             echo "Next: $0 --board $BOARD_SLUG --phase slow-meta --epoch $EPOCH"
         else
-            echo ""
-            echo "Next: $0 --board $BOARD_SLUG --phase rollout --epoch $next_epoch"
+            # Decay budget for next epoch
+            local initial_budget
+            initial_budget=$(python3 -c "import json; print(json.load(open('$STATE_DIR/board-metadata.json'))['edit_budget'])")
+            local new_budget
+            new_budget=$(compute_budget "$next_epoch" "$initial_budget")
+            python3 -c "
+import json
+meta = json.load(open('$STATE_DIR/board-metadata.json'))
+meta['edit_budget'] = $new_budget
+json.dump(meta, open('$STATE_DIR/board-metadata.json', 'w'), indent=2)
+"
+            echo "  Budget for epoch $next_epoch: $new_budget edits"
+
+            # Check for plateau — no improvement over last 2 epochs
+            local plateau
+            plateau=$(python3 -c "
+import json
+meta = json.load(open('$STATE_DIR/board-metadata.json'))
+history = meta.get('pass_rate_history', [])
+if len(history) >= 3:
+    latest = history[-1]['pass_rate']
+    prev = history[-2]['pass_rate']
+    older = history[-3]['pass_rate']
+    print('true' if (latest <= prev and prev <= older) else 'false')
+else:
+    print('false')
+")
+            if [[ "$plateau" == "true" ]]; then
+                echo ""
+                echo "Validation pass rates plateaued. Triggering slow-meta phase."
+                echo "Next: $0 --board $BOARD_SLUG --phase slow-meta --epoch $EPOCH"
+            else
+                echo ""
+                echo "Next: $0 --board $BOARD_SLUG --phase rollout --epoch $next_epoch"
+            fi
         fi
     else
         echo "To merge, run with --exec or:"
@@ -682,7 +786,7 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" oneshot -z -m "$prompt" 2>/dev/null || echo '{"error": "execution failed"}')
+        result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys

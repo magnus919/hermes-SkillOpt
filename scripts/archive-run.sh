@@ -60,7 +60,7 @@ EOF
 fi
 
 # Archive the board
-if "$HERMES" kanban boards list 2>/dev/null | grep -q "$BOARD_SLUG"; then
+if "$HERMES" kanban boards list 2>/dev/null | grep -qF "$BOARD_SLUG"; then
     echo "Archiving board: $BOARD_SLUG"
     "$HERMES" kanban boards archive "$BOARD_SLUG" 2>/dev/null || \
         echo "  (board archived manually)"
