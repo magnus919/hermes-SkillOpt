@@ -386,14 +386,34 @@ suite = json.load(open('$TEST_SUITE'))
 print(json.dumps(suite.get('validation', []), indent=2))
 ")
 
-        # For each proposal, apply and test
+        # For each proposal, apply and test — write data to temp files, pass paths via env vars
+        local tmp_proposals
+        tmp_proposals=$(mktemp)
+        local tmp_skill
+        tmp_skill=$(mktemp)
+        local tmp_val
+        tmp_val=$(mktemp)
+        echo "$proposals" > "$tmp_proposals"
+        echo "$skill_content" > "$tmp_skill"
+        echo "$val_tasks" > "$tmp_val"
+        export PROPOSALS_FILE="$tmp_proposals"
+        export SKILL_FILE="$tmp_skill"
+        export VAL_TASKS_FILE="$tmp_val"
+        export EPOCH_VAL="$EPOCH"
+        export TARGET_PATH="$TARGET"
+        export VAL_DIR="$STATE_DIR/validation-results"
+
         python3 << 'PYEOF'
 import json, os, subprocess, sys
 
-proposals = json.loads(os.environ.get('PROPOSALS_JSON', '{}'))
-skill_content = os.environ.get('SKILL_CONTENT', '')
-val_tasks = json.loads(os.environ.get('VAL_TASKS_JSON', '[]'))
-epoch = os.environ.get('EPOCH', '1')
+# Read from temp files (avoids env var size limits for large JSON)
+with open(os.environ['PROPOSALS_FILE']) as f:
+    proposals = json.load(f)
+with open(os.environ['SKILL_FILE']) as f:
+    skill_content = f.read()
+with open(os.environ['VAL_TASKS_FILE']) as f:
+    val_tasks = json.load(f)
+epoch = os.environ.get('EPOCH_VAL', '1')
 target = os.environ.get('TARGET_PATH', '')
 val_dir = os.environ.get('VAL_DIR', '')
 
@@ -495,7 +515,10 @@ if rejected > 0:
         json.dump(buffer, f, indent=2)
     print(f"  Rejected edits appended to: {buffer_file}")
 PYEOF
-    else:
+
+        # Clean up temp files
+        rm -f "$tmp_proposals" "$tmp_skill" "$tmp_val"
+    else
         echo "To run validation, use --exec or:"
         echo "  1. Create a copy of the target skill"
         echo "  2. Apply each proposed edit to the copy"
@@ -527,8 +550,13 @@ run_merge() {
     fi
 
     if [[ "$EXEC" == true ]]; then
+        export EPOCH="$EPOCH"
+        export TARGET_PATH="$TARGET"
+        export VAL_DIR="$STATE_DIR/validation-results"
+        export SNAPSHOTS_DIR="$STATE_DIR/snapshots"
+        export STATE_DIR="$STATE_DIR"
         python3 << 'PYEOF'
-import json, os, glob
+import json, os, glob, datetime
 
 epoch = os.environ.get('EPOCH', '1')
 target = os.environ.get('TARGET_PATH', '')
@@ -598,7 +626,7 @@ print(f"  Snapshot saved: {snapshot}")
 meta_file = os.path.join(state_dir, 'board-metadata.json')
 meta = json.load(open(meta_file))
 meta['epoch'] = int(epoch) + 1
-meta['last_merged_at'] = os.popen('date -u +%Y-%m-%dT%H:%M:%SZ').read().strip()
+meta['last_merged_at'] = datetime.datetime.utcnow().isoformat() + 'Z'
 with open(meta_file, 'w') as f:
     json.dump(meta, f, indent=2)
 print(f"  Epoch incremented to: {int(epoch) + 1}")
