@@ -47,7 +47,7 @@ Training and validation task sets MUST be distinct. Edits are only accepted if t
 1. **One-time install** — clone the repo into your skills directory:
    ```bash
    git clone https://github.com/magnus919/hermes-SkillOpt \
-     ~/.hermes/skills/skillopt/SkillOpt
+     ~/.hermes/skills/SkillOpt
    ```
 
 2. **Start a conversation** with your Hermes Agent and tell it what you want:

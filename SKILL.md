@@ -108,7 +108,7 @@ The edit budget is configurable in `board-metadata.json` under `edit_budget`.
 1. **One-time install** — clone the repo into your skills directory:
    ```bash
    git clone https://github.com/magnus919/hermes-SkillOpt \
-     ~/.hermes/skills/skillopt/SkillOpt
+     ~/.hermes/skills/SkillOpt
    ```
 
 2. **In a conversation** with your agent, say something like:
