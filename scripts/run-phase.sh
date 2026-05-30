@@ -16,6 +16,25 @@ SKILLOPT_DIR="${SKILLOPT_DIR:-$HOME/.hermes/SkillOpt}"
 HERMES="${HERMES:-hermes}"
 ERROR_LOG="${SKILLOPT_DIR}/hermes-oneshot-errors.log"
 
+# Cosine-decayed edit budget computation
+# Budget decreases from initial to floor over max_epochs
+compute_budget() {
+    local epoch="$1"
+    local initial="$2"
+    local floor="${3:-2}"
+    local max_epochs="${4:-4}"
+    python3 -c "
+import math
+e = int($epoch)
+init = int($initial)
+fl = int($floor)
+max_e = int($max_epochs)
+t = min(e, max_e) / max_e
+budget = int(fl + (init - fl) * (1 + math.cos(math.pi * t)) / 2)
+print(max(budget, fl))
+"
+}
+
 show_usage() {
     sed -n '3,14p' "$0"
     exit 1
@@ -625,24 +644,78 @@ with open(target, 'w') as f:
 print(f"  Merged: {accepted} edits, {rejected} rejected")
 print(f"  Snapshot saved: {snapshot}")
 
-# Update metadata epoch counter
+# Update metadata epoch counter and pass rate history
 meta_file = os.path.join(state_dir, 'board-metadata.json')
 meta = json.load(open(meta_file))
 meta['epoch'] = int(epoch) + 1
 meta['last_merged_at'] = datetime.datetime.utcnow().isoformat() + 'Z'
+# Record pass rate for plateau detection
+total_val = accepted + rejected
+pass_rate = round(accepted / total_val, 2) if total_val > 0 else 0.0
+if 'pass_rate_history' not in meta:
+    meta['pass_rate_history'] = []
+meta['pass_rate_history'].append({"epoch": int(epoch), "pass_rate": pass_rate, "accepted": accepted, "rejected": rejected})
 with open(meta_file, 'w') as f:
     json.dump(meta, f, indent=2)
 print(f"  Epoch incremented to: {int(epoch) + 1}")
+print(f"  Pass rate for epoch {epoch}: {pass_rate}")
 PYEOF
 
         local next_epoch=$((EPOCH + 1))
+
+        # Plateau detection with budget decay
         if [[ "$EPOCH" -ge 4 ]]; then
+            # Compute budget for next epoch (cosine decay)
+            local initial_budget
+            initial_budget=$(python3 -c "import json; print(json.load(open('$STATE_DIR/board-metadata.json'))['edit_budget'])")
+            local new_budget
+            new_budget=$(compute_budget "$next_epoch" "$initial_budget")
+            python3 -c "
+import json
+meta = json.load(open('$STATE_DIR/board-metadata.json'))
+meta['edit_budget'] = $new_budget
+json.dump(meta, open('$STATE_DIR/board-metadata.json', 'w'), indent=2)
+"
+            echo "  Budget for epoch $next_epoch: $new_budget edits"
             echo ""
-            echo "Epoch $EPOCH reached. Triggering slow-meta phase."
+            echo "Epoch $EPOCH reached plateau threshold. Triggering slow-meta phase."
             echo "Next: $0 --board $BOARD_SLUG --phase slow-meta --epoch $EPOCH"
         else
-            echo ""
-            echo "Next: $0 --board $BOARD_SLUG --phase rollout --epoch $next_epoch"
+            # Decay budget for next epoch
+            local initial_budget
+            initial_budget=$(python3 -c "import json; print(json.load(open('$STATE_DIR/board-metadata.json'))['edit_budget'])")
+            local new_budget
+            new_budget=$(compute_budget "$next_epoch" "$initial_budget")
+            python3 -c "
+import json
+meta = json.load(open('$STATE_DIR/board-metadata.json'))
+meta['edit_budget'] = $new_budget
+json.dump(meta, open('$STATE_DIR/board-metadata.json', 'w'), indent=2)
+"
+            echo "  Budget for epoch $next_epoch: $new_budget edits"
+
+            # Check for plateau — no improvement over last 2 epochs
+            local plateau
+            plateau=$(python3 -c "
+import json
+meta = json.load(open('$STATE_DIR/board-metadata.json'))
+history = meta.get('pass_rate_history', [])
+if len(history) >= 3:
+    latest = history[-1]['pass_rate']
+    prev = history[-2]['pass_rate']
+    older = history[-3]['pass_rate']
+    print('true' if (latest <= prev and prev <= older) else 'false')
+else:
+    print('false')
+")
+            if [[ "$plateau" == "true" ]]; then
+                echo ""
+                echo "Validation pass rates plateaued. Triggering slow-meta phase."
+                echo "Next: $0 --board $BOARD_SLUG --phase slow-meta --epoch $EPOCH"
+            else
+                echo ""
+                echo "Next: $0 --board $BOARD_SLUG --phase rollout --epoch $next_epoch"
+            fi
         fi
     else
         echo "To merge, run with --exec or:"
