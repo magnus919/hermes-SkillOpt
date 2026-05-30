@@ -45,8 +45,9 @@ Training and validation task sets MUST be distinct. Edits are only accepted if t
 ## Quick Start
 
 ```bash
-# 1. Install the skill (requires Hermes Agent)
-hermes curator install magnus919/hermes-SkillOpt
+# 1. Install the skill into your Hermes skills directory
+git clone https://github.com/magnus919/hermes-SkillOpt \
+  ~/.hermes/skills/skillopt/SkillOpt
 
 # 2. Seed a board for your target skill
 skillopt action=seed-board \

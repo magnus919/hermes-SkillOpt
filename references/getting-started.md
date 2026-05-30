@@ -12,8 +12,8 @@ This walkthrough takes you from a fresh Hermes install through your first comple
 ## Step 1: Install the Skill
 
 ```bash
-# Via curator (recommended)
-hermes curator install magnus919/hermes-SkillOpt
+# Via git clone into your Hermes skills directory
+git clone https://github.com/magnus919/hermes-SkillOpt ~/.hermes/skills/skillopt/SkillOpt
 
 # Or manually
 git clone https://github.com/magnus919/hermes-SkillOpt ~/.hermes/skills/skillopt/SkillOpt
