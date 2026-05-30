@@ -210,7 +210,7 @@ Output: JSON following the rollout record schema in references/artifact-formats.
 
             "$HERMES" kanban create "Rollout: ${CURRENT_TASK}" \
                 --body "$BODY" \
-                --priority high \
+                --priority 3 \
                 --created-by "skillopt"
             ;;
     esac
@@ -221,6 +221,7 @@ done
     --body "Run the $VALIDATION_COUNT validation tasks (defined in $TEST_SUITE_FILE) with the current skill at $TARGET. Record metrics as the baseline for future comparison.
 
 State: $SKILLOPT_DIR/$SKILL_NAME/validation-results/baseline.json" \
+    --priority 1 \
     --created-by "skillopt"
 
 # Switch back to default board so subsequent non-SkillOpt commands aren't confused
