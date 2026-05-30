@@ -135,6 +135,7 @@ The primary interface for SkillOpt is conversational — your agent drives the p
 | `references/methodology-guide.md` | Deep rationale for every phase — why each exists, what failure it prevents, the research it's based on |
 | `references/test-suite-design.md` | How to pick training and validation tasks for different skill types |
 | `references/artifact-formats.md` | JSON schemas for every intermediate artifact across all phases |
+| `references/command-syntax-verification.md` | Verifying CLI command examples in proposed edits before merging — worked example from GroktoCrawl Epoch 2→3 |
 
 ## Templates
 
@@ -165,7 +166,22 @@ The primary interface for SkillOpt is conversational — your agent drives the p
 
 - **Running epochs without plateau detection.** After 4 epochs, if the validation metric isn't improving, you've reached a plateau. Continuing to run epochs past this point wastes compute and risks overfitting. The slow-meta phase exists to handle this.
 
-- **Applying the methodology to skills without measurable outcomes.** If you can't define what "working" looks like for a skill (e.g., "write a better image prompt"), the validation gate has nothing to measure. For these skills, use the methodology loosely — define correctness as "produces valid output in the expected format."
+- **Combined code + skill fixes:** Epoch 2 of the GroktoCrawl optimization demonstrated a two-layer fix: a code bug (CLI parsing) and a skill documentation gap (missing browser fallback guidance). When validation consistently fails on one task type (e.g., all search tasks), check for a tool bug BEFORE proposing skill edits. Fix the tool, re-run validation, then observe whether the skill edits meaningfully changed outcomes. The tool bug fix may resolve the validation failures independently — the skill edit adds long-term user guidance, not correctness.
+
+- **Stale test assertions exposed by tool fixes:** The arr-cli optimization (Epoch 1) demonstrated that fixing a tool bug can reveal stale test expectations. A test checking `"Radarr v5" in out` failed after the server was updated to v6 — the test itself hadn't been updated to match the running environment. After applying tool-bug fixes, run the full test suite before the validation phase. The test suite catches regressions AND stale assertions that validation tasks (which test the skill, not the code) won't surface. If you can't define what "working" looks like for a skill (e.g., "write a better image prompt"), the validation gate has nothing to measure. For these skills, use the methodology loosely — define correctness as "produces valid output in the expected format."
+
+- **Hermes kanban `--priority` prefers numeric values.** The canonical format for `hermes kanban create --priority` is an integer: `3` (high), `2` (medium), `1` (low), `0` (none). As of hermes-agent PR #35082, string aliases (`--priority high`) also work, but numerics are guaranteed compatible across all versions. If tasks appear without expected priority labels, check whether you're passing a string to an older hermes-agent that only accepts integers.
+
+- **Command syntax edits require end-to-end testing, not just task validation.** During Epoch 2 of a real optimization run (GroktoCrawl browser fallback), proposed edits included `browser snapshot --full` — a command that looked plausible from the CLI help output but did not exist as a subcommand (`navigate` and `snapshot` are `exec` actions, not independent subcommands). The validation tasks (scrape + search) did not exercise the browser subcommand, so the incorrect syntax passed the validation gate undetected. The error was only caught in Epoch 3 by running the browser commands live against the server.
+
+The rule: **when a proposed edit adds or changes command-line examples, test every command in the edit's examples end-to-end before merging.** The validation task suite is designed to test the skill's task-level effectiveness — not the syntactic correctness of example commands. These are different failure surfaces. Add a manual verification step between Propose and Validate:
+
+1. Identify which proposed edits contain CLI examples
+2. Run each command example in the edit exactly as written
+3. If any command fails (syntax error, wrong flag, missing subcommand), reject or fix the edit before running the validation suite
+4. If the edit contains only prose changes (no command examples), this step is unnecessary
+
+This is a special case of the surface-plausibility trap: command syntax that reads correctly in text may not execute correctly, and the validation gate doesn't automatically test prose examples for syntactic accuracy against the live CLI.
 
 ## Attribution
 
