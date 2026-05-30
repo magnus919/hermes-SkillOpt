@@ -1,5 +1,5 @@
 ---
-name: SkillOpt
+name: skillopt
 description: Run controlled skill optimization cycles on any skill document. Uses kanban-based pipelines with validation gates — the methodology from Microsoft Research's SkillOpt (arXiv 2605.23904).
 version: 1.0.0-alpha
 author: Jasper (on behalf of Magnus Hedemark)
@@ -108,7 +108,7 @@ The edit budget is configurable in `board-metadata.json` under `edit_budget`.
 1. **One-time install** — clone the repo into your skills directory:
    ```bash
    git clone https://github.com/magnus919/hermes-SkillOpt \
-     ~/.hermes/skills/SkillOpt
+     ~/.hermes/skills/skillopt
    ```
 
 2. **In a conversation** with your agent, say something like:

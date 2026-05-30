@@ -6,7 +6,7 @@ SkillOpt is a methodology skill that any Hermes Agent can load to run controlled
 
 ## Where It Lives
 
-- Skill: `~/.hermes/skills/skillopt/SkillOpt/`
+- Skill: `~/.hermes/skills/skillopt/`
 - Per-target state: `~/.hermes/SkillOpt/<skill-name>/`
 
 ## Key Files
