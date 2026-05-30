@@ -13,7 +13,7 @@ set -euo pipefail
 #     [--budget N]
 #
 # If --*-tasks-file is provided, those tasks are loaded into the board.
-# If omitted, generic task placeholders are created for manual editing.
+# If omitted, generic task placeholders are created.
 
 SKILLOPT_DIR="${SKILLOPT_DIR:-$HOME/.hermes/SkillOpt}"
 HERMES="${HERMES:-hermes}"
@@ -60,9 +60,11 @@ fi
 SKILL_NAME="$(basename "$(dirname "$TARGET")")"
 BOARD_SLUG="SkillOpt-${SKILL_NAME}"
 
-if "$HERMES" kanban boards list 2>/dev/null | grep -q "$BOARD_SLUG"; then
+# Check if board already exists — boards create errors if duplicate
+if "$HERMES" kanban boards list 2>/dev/null | grep -q "^${BOARD_SLUG} "; then
     echo "ERROR: Board '$BOARD_SLUG' already exists for skill '$SKILL_NAME'."
-    echo "Run 'archive-run.sh' first to finalize the existing run."
+    echo "Use a different board name or archive the existing one:"
+    echo "  hermes kanban archive ..."
     exit 1
 fi
 
@@ -113,7 +115,6 @@ cp "$TARGET" "$SKILLOPT_DIR/$SKILL_NAME/snapshots/$SNAPSHOT_FILE"
 # Write test suite definition
 TEST_SUITE_FILE="$SKILLOPT_DIR/$SKILL_NAME/test-suite.json"
 
-# Generate generic tasks if not provided
 if [[ -z "$TRAIN_TASKS" ]]; then
     TRAIN_TASKS=$(python3 -c "
 import json
@@ -151,19 +152,7 @@ suite = {
     'skill_target': '$TARGET'
 }
 open('$TEST_SUITE_FILE', 'w').write(json.dumps(suite, indent=2))
-" 2>/dev/null || {
-    # Fallback: write via heredoc-compatible approach
-    python3 << 'PYEOF'
-import json, os
-suite = {
-    "training": json.loads(os.environ.get("TRAIN_TASKS_JSON", "[]")),
-    "validation": json.loads(os.environ.get("VAL_TASKS_JSON", "[]")),
-    "created_at": os.environ.get("CREATED_AT", ""),
-    "skill_target": os.environ.get("TARGET_PATH", "")
-}
-open(os.environ["SUITE_PATH"], "w").write(json.dumps(suite, indent=2))
-PYEOF
-}
+"
 
 echo "Test suite written: $TEST_SUITE_FILE"
 
@@ -189,10 +178,13 @@ echo ""
 echo "Creating board: $BOARD_SLUG for skill: $SKILL_NAME"
 
 "$HERMES" kanban boards create "$BOARD_SLUG" \
-    --columns "Backlog,Rollout,Reflect,Propose,Validate,Merge,Rejected-Buffer" \
-    --labels "phase:rollout,phase:reflect,phase:propose,phase:validate,phase:merge,phase:slow-meta,status:in-progress,status:pending-validation,status:accepted,status:rejected"
+    --name "SkillOpt: $SKILL_NAME optimization" \
+    --description "Controlled optimization for ~/.hermes/skills/$SKILL_NAME/SKILL.md using the SkillOpt six-phase pipeline (rollout → reflect → propose → validate → merge → slow-meta)"
 
-# Create Phase 1 rollout tasks
+# Switch to the board for subsequent commands
+"$HERMES" kanban boards switch "$BOARD_SLUG"
+
+# Create Phase 1 rollout tasks (one per training task)
 echo "$TRAIN_TASKS" | python3 -c "
 import json, sys
 tasks = json.load(sys.stdin)
@@ -204,9 +196,9 @@ for i, task in enumerate(tasks):
 " | while IFS= read -r line; do
     case "$line" in
         TASK:*) CURRENT_TASK="${line#TASK:}";;
-        DESC:*) 
+        DESC:*)
             DESC="${line#DESC:}"
-            TASK_BODY="Rollout task ${CURRENT_TASK} for '$SKILL_NAME' (epoch 1).
+            BODY="Rollout task ${CURRENT_TASK} for '$SKILL_NAME' (epoch 1).
 
 State: $SKILLOPT_DIR/$SKILL_NAME/rollouts/epoch-1-${CURRENT_TASK}.json
 
@@ -215,23 +207,24 @@ Task: ${DESC}
 Execute the skill at $TARGET against this task.
 Record: task description, execution trace, outcome (success/failure), and any observed failure modes.
 Output: JSON following the rollout record schema in references/artifact-formats.md"
-            
-            echo "$TASK_BODY" | "$HERMES" kanban create "$BOARD_SLUG" \
-                --column "Rollout" \
-                --title "Rollout: ${CURRENT_TASK}" \
-                --label "phase:rollout"
+
+            "$HERMES" kanban create "Rollout: ${CURRENT_TASK}" \
+                --body "$BODY" \
+                --priority high \
+                --created-by "skillopt"
             ;;
     esac
 done
 
-# Create Validation baseline task
-"$HERMES" kanban create "$BOARD_SLUG" \
-    --column "Backlog" \
-    --title "Validation: establish baseline metrics" \
-    --label "status:pending-validation" \
+# Create validation baseline task
+"$HERMES" kanban create "Validation: establish baseline metrics" \
     --body "Run the $VALIDATION_COUNT validation tasks (defined in $TEST_SUITE_FILE) with the current skill at $TARGET. Record metrics as the baseline for future comparison.
 
-State: $SKILLOPT_DIR/$SKILL_NAME/validation-results/baseline.json"
+State: $SKILLOPT_DIR/$SKILL_NAME/validation-results/baseline.json" \
+    --created-by "skillopt"
+
+# Switch back to default board so subsequent non-SkillOpt commands aren't confused
+"$HERMES" kanban boards switch default 2>/dev/null || true
 
 echo ""
 echo "Board created: $BOARD_SLUG"
@@ -239,4 +232,10 @@ echo "State directory: $SKILLOPT_DIR/$SKILL_NAME/"
 echo "Baseline snapshot: $SNAPSHOT_FILE"
 echo "Test suite: $TEST_SUITE_FILE"
 echo ""
-echo "Next: run-phase.sh --board $BOARD_SLUG --phase rollout --epoch 1"
+echo "Switch to the board:"
+echo "  hermes kanban boards switch $BOARD_SLUG"
+echo "List tasks:"
+echo "  hermes kanban list"
+echo ""
+echo "Run the first rollout phase:"
+echo "  run-phase.sh --board $BOARD_SLUG --phase rollout --epoch 1"
