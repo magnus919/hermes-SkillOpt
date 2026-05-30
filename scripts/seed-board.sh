@@ -23,6 +23,12 @@ show_usage() {
     exit 1
 }
 
+slugify() {
+    # Hermes normalizes board slugs to lowercase kebab-case. Do it explicitly
+    # so subsequent list/switch/archive commands use the same literal slug.
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
+}
+
 # --- Argument parsing ---
 TARGET=""
 TRAINING_COUNT=""
@@ -58,10 +64,11 @@ if [[ ! -f "$TARGET" ]]; then
 fi
 
 SKILL_NAME="$(basename "$(dirname "$TARGET")")"
-BOARD_SLUG="SkillOpt-${SKILL_NAME}"
+SKILL_SLUG="$(slugify "$SKILL_NAME")"
+BOARD_SLUG="skillopt-${SKILL_SLUG}"
 
 # Check if board already exists — boards create errors if duplicate
-if "$HERMES" kanban boards list 2>/dev/null | grep -q "^${BOARD_SLUG} "; then
+if "$HERMES" kanban boards list 2>/dev/null | grep -qF "$BOARD_SLUG"; then
     echo "ERROR: Board '$BOARD_SLUG' already exists for skill '$SKILL_NAME'."
     echo "Use a different board name or archive the existing one:"
     echo "  hermes kanban archive ..."
@@ -107,13 +114,13 @@ fi
 
 # --- Setup state directory ---
 
-mkdir -p "$SKILLOPT_DIR/$SKILL_NAME"/{rollouts,reflections,proposals,validation-results,snapshots}
+mkdir -p "$SKILLOPT_DIR/$SKILL_SLUG"/{rollouts,reflections,proposals,validation-results,snapshots}
 
 SNAPSHOT_FILE="baseline-$(date +%Y%m%d-%H%M%S).md"
-cp "$TARGET" "$SKILLOPT_DIR/$SKILL_NAME/snapshots/$SNAPSHOT_FILE"
+cp "$TARGET" "$SKILLOPT_DIR/$SKILL_SLUG/snapshots/$SNAPSHOT_FILE"
 
 # Write test suite definition
-TEST_SUITE_FILE="$SKILLOPT_DIR/$SKILL_NAME/test-suite.json"
+TEST_SUITE_FILE="$SKILLOPT_DIR/$SKILL_SLUG/test-suite.json"
 
 if [[ -z "$TRAIN_TASKS" ]]; then
     TRAIN_TASKS=$(python3 -c "
@@ -143,39 +150,45 @@ print(json.dumps(tasks))
 ")
 fi
 
-# Write test suite definition — write JSON to temp files to avoid injection in triple-quoted strings
-TEST_SUITE_FILE="$SKILLOPT_DIR/$SKILL_NAME/test-suite.json"
-local tmp_train
+# Write test suite definition — pass data via temp files/environment so task
+# descriptions containing quotes, backticks, $(), or triple-quotes cannot break
+# shell or Python parsing.
 tmp_train=$(mktemp)
-local tmp_val
 tmp_val=$(mktemp)
 echo "$TRAIN_TASKS" > "$tmp_train"
 echo "$VAL_TASKS" > "$tmp_val"
 
-python3 -c "
-import json
-with open('$tmp_train') as f:
+TRAIN_TASKS_FILE="$tmp_train" \
+VAL_TASKS_FILE="$tmp_val" \
+TEST_SUITE_FILE="$TEST_SUITE_FILE" \
+TARGET_PATH="$TARGET" \
+CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+python3 << 'PYEOF'
+import json, os
+with open(os.environ['TRAIN_TASKS_FILE']) as f:
     training = json.load(f)
-with open('$tmp_val') as f:
+with open(os.environ['VAL_TASKS_FILE']) as f:
     validation = json.load(f)
 suite = {
     'training': training,
     'validation': validation,
-    'created_at': '$(date -u +%Y-%m-%dT%H:%M:%SZ)',
-    'skill_target': '$TARGET'
+    'created_at': os.environ['CREATED_AT'],
+    'skill_target': os.environ['TARGET_PATH'],
 }
-open('$TEST_SUITE_FILE', 'w').write(json.dumps(suite, indent=2))
-"
+with open(os.environ['TEST_SUITE_FILE'], 'w') as f:
+    json.dump(suite, f, indent=2)
+PYEOF
 
 rm -f "$tmp_train" "$tmp_val"
 
 echo "Test suite written: $TEST_SUITE_FILE"
 
 # Board metadata
-cat > "$SKILLOPT_DIR/$SKILL_NAME/board-metadata.json" << EOF
+cat > "$SKILLOPT_DIR/$SKILL_SLUG/board-metadata.json" << EOF
 {
     "target": "$TARGET",
     "skill_name": "$SKILL_NAME",
+    "skill_slug": "$SKILL_SLUG",
     "board_slug": "$BOARD_SLUG",
     "training_count": $TRAINING_COUNT,
     "validation_count": $VALIDATION_COUNT,
@@ -194,30 +207,32 @@ echo "Creating board: $BOARD_SLUG for skill: $SKILL_NAME"
 
 "$HERMES" kanban boards create "$BOARD_SLUG" \
     --name "SkillOpt: $SKILL_NAME optimization" \
-    --description "Controlled optimization for ~/.hermes/skills/$SKILL_NAME/SKILL.md using the SkillOpt six-phase pipeline (rollout → reflect → propose → validate → merge → slow-meta)"
+    --description "Controlled optimization for $TARGET using the SkillOpt six-phase pipeline (rollout → reflect → propose → validate → merge → slow-meta)"
 
 # Switch to the board for subsequent commands
 "$HERMES" kanban boards switch "$BOARD_SLUG"
 
-# Create Phase 1 rollout tasks (one per training task)
+# Create Phase 1 rollout tasks (one per training task). Emit each task as
+# base64 JSON so instructions may contain newlines or shell-active characters.
 echo "$TRAIN_TASKS" | python3 -c "
-import json, sys
+import base64, json, sys
 tasks = json.load(sys.stdin)
 for i, task in enumerate(tasks):
-    desc = task.get('instruction', f'Training task {i+1}')
-    task_id = task.get('id', f'train-{i+1}')
-    print(f'TASK:{task_id}')
-    print(f'DESC:{desc}')
-" | while IFS= read -r line; do
-    case "$line" in
-        TASK:*) CURRENT_TASK="${line#TASK:}";;
-        DESC:*)
-            local body_file
-            body_file=$(mktemp)
-            cat > "$body_file" << BODYEOF
+    payload = {
+        'id': task.get('id', f'train-{i+1}'),
+        'instruction': task.get('instruction', f'Training task {i+1}'),
+    }
+    print(base64.b64encode(json.dumps(payload).encode()).decode())
+" | while IFS= read -r encoded_task; do
+    [[ -z "$encoded_task" ]] && continue
+    CURRENT_TASK=$(TASK_B64="$encoded_task" python3 -c "import base64,json,os; print(json.loads(base64.b64decode(os.environ['TASK_B64']))['id'])")
+    DESC=$(TASK_B64="$encoded_task" python3 -c "import base64,json,os; print(json.loads(base64.b64decode(os.environ['TASK_B64']))['instruction'])")
+
+    body_file=$(mktemp)
+    cat > "$body_file" << BODYEOF
 Rollout task ${CURRENT_TASK} for '${SKILL_NAME}' (epoch 1).
 
-State: ${SKILLOPT_DIR}/${SKILL_NAME}/rollouts/epoch-1-${CURRENT_TASK}.json
+State: ${SKILLOPT_DIR}/${SKILL_SLUG}/rollouts/epoch-1-${CURRENT_TASK}.json
 
 Task: ${DESC}
 
@@ -226,20 +241,18 @@ Record: task description, execution trace, outcome (success/failure), and any ob
 Output: JSON following the rollout record schema in references/artifact-formats.md
 BODYEOF
 
-            "$HERMES" kanban create "Rollout: ${CURRENT_TASK}" \
-                --body "$(cat "$body_file")" \
-                --priority 3 \
-                --created-by "skillopt"
-            rm -f "$body_file"
-            ;;
-    esac
+    "$HERMES" kanban create "Rollout: ${CURRENT_TASK}" \
+        --body "$(cat "$body_file")" \
+        --priority 3 \
+        --created-by "skillopt"
+    rm -f "$body_file"
 done
 
 # Create validation baseline task
 "$HERMES" kanban create "Validation: establish baseline metrics" \
     --body "Run the $VALIDATION_COUNT validation tasks (defined in $TEST_SUITE_FILE) with the current skill at $TARGET. Record metrics as the baseline for future comparison.
 
-State: $SKILLOPT_DIR/$SKILL_NAME/validation-results/baseline.json" \
+State: $SKILLOPT_DIR/$SKILL_SLUG/validation-results/baseline.json" \
     --priority 1 \
     --created-by "skillopt"
 
@@ -248,7 +261,7 @@ State: $SKILLOPT_DIR/$SKILL_NAME/validation-results/baseline.json" \
 
 echo ""
 echo "Board created: $BOARD_SLUG"
-echo "State directory: $SKILLOPT_DIR/$SKILL_NAME/"
+echo "State directory: $SKILLOPT_DIR/$SKILL_SLUG/"
 echo "Baseline snapshot: $SNAPSHOT_FILE"
 echo "Test suite: $TEST_SUITE_FILE"
 echo ""
