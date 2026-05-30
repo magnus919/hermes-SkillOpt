@@ -424,8 +424,8 @@ for i, edit in enumerate(edits):
     edit_id = edit.get('id', f'edit-{i+1}')
     edit_type = edit.get('type', 'replace')
     location = edit.get('location', '')
-    old_text = edit.get('old_text', '')
-    new_text = edit.get('new_text', '')
+    old_text = edit.get('old_text') or ''
+    new_text = edit.get('new_text') or ''
 
     # Apply edit to a copy of the skill
     edited_skill = skill_content
