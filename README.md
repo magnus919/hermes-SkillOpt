@@ -44,10 +44,10 @@ Training and validation task sets MUST be distinct. Edits are only accepted if t
 
 ## Quick Start
 
-1. **One-time install** — add the repo as a skill tap and install:
+1. **One-time install** — add the repo as a skill tap and install via URL:
    ```bash
    hermes skills tap add magnus919/hermes-SkillOpt
-   hermes skills install magnus919/hermes-SkillOpt --category skillopt
+   hermes skills install https://raw.githubusercontent.com/magnus919/hermes-SkillOpt/main/SKILL.md --category skillopt
    ```
 
 2. **Start a conversation** with your Hermes Agent and tell it what you want:
