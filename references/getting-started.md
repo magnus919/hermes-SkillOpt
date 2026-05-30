@@ -1,98 +1,78 @@
 # Getting Started — Your First SkillOpt Run
 
-This walkthrough takes you from a fresh Hermes install through your first completed SkillOpt optimization run.
+This walkthrough takes you from install through your first completed SkillOpt optimization run.
 
 ## Prerequisites
 
 - Hermes Agent installed and configured
-- Kanban system available (run `hermes kanban boards list` to verify)
-- A target skill document at a known path
-- 3-5 training tasks and 3-5 validation tasks defined (see test-suite-design.md)
+- Kanban system available (your agent will check this)
+- A target skill you want to optimize
+- A few minutes to work with your agent on defining test tasks
 
 ## Step 1: Install the Skill
 
 ```bash
-# Via git clone into your Hermes skills directory
-git clone https://github.com/magnus919/hermes-SkillOpt ~/.hermes/skills/skillopt/SkillOpt
-
-# Or manually
 git clone https://github.com/magnus919/hermes-SkillOpt ~/.hermes/skills/skillopt/SkillOpt
 ```
 
-## Step 2: Load the Skill
+That's the only shell command you'll need. Everything from here is conversation with your agent.
 
-In a new Hermes session or a session where you want to run SkillOpt:
+## Step 2: Start an Optimization
+
+In a regular conversation with your Hermes Agent, say:
 
 ```
-/load SkillOpt
+I want to optimize my hugo-blog skill using SkillOpt.
 ```
 
-Or include it in your session's skill configuration.
+The agent will load the SkillOpt methodology and begin the guided process.
 
 ## Step 3: Define Your Test Suite
 
-Create a test suite for your target skill. For a first run, use the Small configuration (3 training + 3 validation tasks). See `references/test-suite-design.md` for guidance on choosing tasks.
+Your agent will ask you for training and validation tasks. These are concrete examples of what the skill should do well. For a first run, 3 training + 3 validation tasks is a good start.
 
-Example — optimizing a blog post creation skill:
-- Training task 1: "Write a post about Python typing from this outline"
-- Training task 2: "Write a post about Docker networking from this outline"
-- Training task 3: "Write a post about test-driven development from this outline"
+Example conversation:
 
-- Validation task 1: "Write a post about async Python from this outline"
-- Validation task 2: "Write a post about CI/CD pipelines from this outline"
-- Validation task 3: "Write a post about API design from this outline"
+> **Agent:** Let's set up a SkillOpt optimization for hugo-blog. I'll need a few training tasks that represent the skill's core function, and a few different validation tasks for the gate.
+>
+> Can you describe 3 training tasks? These are tasks the skill should handle well.
+>
+> **You:** Write three blog posts about Python, Docker, and TDD from outlines.
+>
+> **Agent:** Great. And 3 validation tasks — different but related?
+>
+> **You:** Write posts about async Python, CI/CD, and API design.
 
-## Step 4: Seed the Board
+See `test-suite-design.md` for detailed guidance on choosing good tasks.
 
-```bash
-skillopt action=seed-board \
-  target=~/.hermes/skills/content/hugo-blog/SKILL.md \
-  training=3 validation=3
-```
+## Step 4: The Agent Runs the Pipeline
 
-This creates:
-- A kanban board named `SkillOpt-hugo-blog`
-- A state directory at `~/.hermes/SkillOpt/hugo-blog/`
-- 3 Rollout tasks in the Rollout column
-- A baseline skill snapshot
+Once the test suite is defined, the agent:
 
-## Step 5: Run Epoch 1
+1. **Seeds** the kanban board and state directory
+2. **Rolls out** each training task using the current skill
+3. **Reflects** on the results to find failure patterns
+4. **Proposes** 1-4 targeted edits to the skill
+5. **Validates** each edit against the held-out validation tasks
+6. **Merges** the accepted edits
+7. **Reports** back with a summary of what changed
 
-```bash
-# Phase 1 — Execute training tasks with the current skill
-# (Run each Rollout task on the board)
-skillopt action=run-phase --board SkillOpt-hugo-blog --phase rollout --epoch 1
+The agent drives each phase, showing you the results at natural checkpoints.
 
-# Phase 2 — Review rollouts, identify failure patterns
-skillopt action=run-phase --board SkillOpt-hugo-blog --phase reflect --epoch 1
+## Step 5: Iterate
 
-# Phase 3 — Propose 1-4 edits based on reflections
-skillopt action=run-phase --board SkillOpt-hugo-blog --phase propose --epoch 1
+After epoch 1, the agent will ask if you want to continue. Epochs 2-4 repeat the cycle, each time building on the previous improvements.
 
-# Phase 4 — Validate each edit against held-out tasks
-skillopt action=run-phase --board SkillOpt-hugo-blog --phase validate --epoch 1
+After epoch 4, the agent runs the slow-meta phase — analyzing the rejected-edit buffer to identify deeper patterns and recommend whether to continue or archive.
 
-# Phase 5 — Merge accepted edits
-skillopt action=run-phase --board SkillOpt-hugo-blog --phase merge --epoch 1
-```
+## Step 6: Review Results
 
-## Step 6: Iterate (Epochs 2-4)
+Your agent will summarize:
+- How many edits were proposed and accepted per epoch
+- What specific changes were made to the skill
+- The measured improvement on the validation set
 
-Repeat the rollout → reflect → propose → validate → merge cycle for epochs 2, 3, and 4.
-
-After epoch 4, run the slow-meta phase:
-
-```bash
-skillopt action=run-phase --board SkillOpt-hugo-blog --phase slow-meta --epoch 4
-```
-
-## Step 7: Archive
-
-```bash
-skillopt action=archive-run --board SkillOpt-hugo-blog
-```
-
-Your optimized skill is at the target path. The run summary and all artifacts are preserved in `~/.hermes/SkillOpt/<skill-name>/`.
+The optimization artifacts (rollouts, reflections, proposals, validation results) are preserved at `~/.hermes/SkillOpt/<skill-name>/` for future reference.
 
 ## What to Expect
 

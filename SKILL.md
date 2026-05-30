@@ -107,40 +107,27 @@ The edit budget is configurable in `board-metadata.json` under `edit_budget`.
 
 ## Quick Start
 
-```bash
-# 1. Make sure your Hermes Agent is running (kanban support required)
-# 2. Seed a board for your target skill
+1. **One-time install** — clone this repo into your Hermes skills directory:
+   ```bash
+   git clone https://github.com/magnus919/hermes-SkillOpt ~/.hermes/skills/skillopt/SkillOpt
+   ```
 
-skillopt action=seed-board \
-  target=~/.hermes/skills/your-category/skill-name/SKILL.md \
-  training=5 validation=5
+2. **In a conversation** with your agent, say something like:
+   ```
+   I want to optimize my vault-note skill.
+   ```
 
-# This creates:
-#   - A kanban board named SkillOpt-<skill-name>
-#   - A state directory at ~/.hermes/SkillOpt/<skill-name>/
-#   - Phase 1 tasks pre-populated in the Rollout column
-#   - Baseline skill snapshot
-
-# 3. Run each phase in sequence
-
-skillopt action=run-phase --board SkillOpt-<skill-name> --phase rollout
-skillopt action=run-phase --board SkillOpt-<skill-name> --phase reflect
-skillopt action=run-phase --board SkillOpt-<skill-name> --phase propose
-skillopt action=run-phase --board SkillOpt-<skill-name> --phase validate
-skillopt action=run-phase --board SkillOpt-<skill-name> --phase merge
-
-# 4. After 4 epochs, archive the run
-
-skillopt action=archive-run --board SkillOpt-<skill-name>
-```
+   The agent loads this skill via `skill_view(name='SkillOpt')`, guides you through defining training and validation tasks, seeds the kanban board, and orchestrates the six-phase pipeline — reporting results at each stage.
 
 ## Scripts
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/seed-board.sh` | Create kanban board, state directory, baseline snapshot, and first epoch tasks |
-| `scripts/run-phase.sh` | Execute a single pipeline phase (rollout/reflect/propose/validate/merge/slow-meta) |
-| `scripts/archive-run.sh` | Finalize a run, store metrics, clean up the board |
+These scripts exist to support agent-driven execution. The agent invokes them behind the scenes when running pipeline phases. Power users can also invoke them directly, but the primary interface is conversational.
+
+| Script | Purpose | Called by agent when... |
+|--------|---------|------------------------|
+| `scripts/seed-board.sh` | Create kanban board, state directory, baseline snapshot | User agrees to a defined test suite |
+| `scripts/run-phase.sh` | Execute a single pipeline phase (rollout/reflect/propose/validate/merge/slow-meta) | Agent runs `--exec` mode for each phase |
+| `scripts/archive-run.sh` | Finalize a run, store metrics, clean up the board | User confirms the optimization is complete |
 
 ## References
 

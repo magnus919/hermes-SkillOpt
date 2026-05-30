@@ -44,23 +44,18 @@ Training and validation task sets MUST be distinct. Edits are only accepted if t
 
 ## Quick Start
 
-```bash
-# 1. Install the skill into your Hermes skills directory
-git clone https://github.com/magnus919/hermes-SkillOpt \
-  ~/.hermes/skills/skillopt/SkillOpt
+1. **One-time install** — clone into your Hermes skills directory:
+   ```bash
+   git clone https://github.com/magnus919/hermes-SkillOpt \
+     ~/.hermes/skills/skillopt/SkillOpt
+   ```
 
-# 2. Seed a board for your target skill
-skillopt action=seed-board \
-  target=~/.hermes/skills/your-skill/SKILL.md \
-  training=5 validation=5
+2. **Start a conversation** with your Hermes Agent and tell it what you want:
+   ```
+   I want to optimize my vault-note skill using SkillOpt
+   ```
 
-# 3. Run phases in sequence
-skillopt action=run-phase --board SkillOpt-<name> --phase rollout
-skillopt action=run-phase --board SkillOpt-<name> --phase reflect
-skillopt action=run-phase --board SkillOpt-<name> --phase propose
-skillopt action=run-phase --board SkillOpt-<name> --phase validate
-skillopt action=run-phase --board SkillOpt-<name> --phase merge
-```
+   The agent loads the SkillOpt methodology, works with you to define a test suite, and orchestrates the full optimization pipeline — no shell commands needed after install.
 
 ## Design Philosophy
 

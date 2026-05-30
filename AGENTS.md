@@ -6,10 +6,8 @@ SkillOpt is a methodology skill that any Hermes Agent can load to run controlled
 
 ## Where Things Live
 
-After install, the skill lives at one of:
-
-- `~/.hermes/skills/skillopt/SkillOpt/` — manual clone install
-- `~/.hermes/skills/` — curator install (may use a category directory)
+After install, the skill lives at:
+- `~/.hermes/skills/skillopt/SkillOpt/`
 
 Per-target state directories go in `~/.hermes/SkillOpt/<skill-name>/`.
 
