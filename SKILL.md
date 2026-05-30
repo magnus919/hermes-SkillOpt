@@ -4,7 +4,7 @@ description: Run controlled skill optimization cycles on any skill document. Use
 version: 1.0.0-alpha
 author: Jasper (on behalf of Magnus Hedemark)
 license: MIT
-compatibility: Hermes Agent only — uses hermes kanban and hermes oneshot — not compatible with Claude Code, Copilot, OpenCode, or Cursor
+compatibility: Hermes Agent only — uses hermes kanban and hermes chat — not compatible with Claude Code, Copilot, OpenCode, or Cursor
 platforms: [linux, macos, windows]
 metadata:
   hermes:
@@ -121,7 +121,7 @@ The edit budget is configurable in `board-metadata.json` under `edit_budget`. Th
 
 ## Scripts — Power Users Only
 
-The primary interface for SkillOpt is conversational — your agent drives the pipeline. These shell scripts exist for power users who want to run phases from the command line instead. The agent ignores them and uses `hermes oneshot` + `hermes kanban` directly.
+The primary interface for SkillOpt is conversational — your agent drives the pipeline. These shell scripts exist for power users who want to run phases from the command line instead. The agent ignores them and uses `hermes chat -Q -q` + `hermes kanban` directly.
 
 | Script | What it does | 
 |--------|-------------|

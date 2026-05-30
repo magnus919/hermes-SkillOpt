@@ -10,11 +10,11 @@ set -euo pipefail
 #
 # By default, each phase validates its prerequisites and prints the
 # exact command the user/agent should run. With --exec, the script
-# attempts to execute the phase using hermes oneshot.
+# attempts to execute the phase using hermes chat -Q -q.
 
 SKILLOPT_DIR="${SKILLOPT_DIR:-$HOME/.hermes/SkillOpt}"
 HERMES="${HERMES:-hermes}"
-ERROR_LOG="${SKILLOPT_DIR}/hermes-oneshot-errors.log"
+ERROR_LOG="${SKILLOPT_DIR}/hermes-chat-errors.log"
 
 # Cosine-decayed edit budget computation
 # Budget decreases from initial to floor over max_epochs
@@ -40,6 +40,12 @@ show_usage() {
     exit 1
 }
 
+run_hermes_prompt() {
+    # `hermes oneshot` was an early prototype command. Current Hermes uses
+    # `hermes chat -q`; -Q keeps stdout machine-readable for JSON artifacts.
+    "$HERMES" chat -Q -q "$1"
+}
+
 BOARD_SLUG=""
 PHASE=""
 EPOCH=""
@@ -61,7 +67,8 @@ if [[ -z "$BOARD_SLUG" || -z "$PHASE" ]]; then
     show_usage
 fi
 
-SKILL_NAME="${BOARD_SLUG#SkillOpt-}"
+SKILL_NAME="${BOARD_SLUG#skillopt-}"
+SKILL_NAME="${SKILL_NAME#SkillOpt-}"
 STATE_DIR="$SKILLOPT_DIR/$SKILL_NAME"
 METADATA_FILE="$STATE_DIR/board-metadata.json"
 
@@ -133,7 +140,7 @@ for t in suite.get('training', []):
     echo ""
 
     if [[ "$EXEC" == true ]]; then
-        # Execute pending rollouts via hermes oneshot
+        # Execute pending rollouts via hermes chat
         while IFS='|' read -r task_id task_desc; do
             [[ -z "$task_id" ]] && continue
             local output_file="$rollout_dir/epoch-$EPOCH-$task_id.json"
@@ -166,29 +173,30 @@ Output ONLY a JSON object with these fields:
 - output_summary: string"
 
             local result
-            result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"outcome": "failure", "failure_modes": ["execution error"], "output_summary": "oneshot command failed"}')
+            result=$(run_hermes_prompt "$prompt" 2>>"$ERROR_LOG" || echo '{"outcome": "failure", "failure_modes": ["execution error"], "output_summary": "hermes chat command failed"}')
 
             # Try to extract JSON from the response
             echo "$result" | python3 -c "
 import json, sys
+raw = sys.stdin.read()
 try:
-    data = json.loads(sys.stdin.read())
-except:
-    data = {'outcome': 'failure', 'failure_modes': ['parse error'], 'output_summary': 'Could not parse JSON from response', 'raw_response': sys.stdin.read()}
+    data = json.loads(raw)
+except Exception:
+    data = {'outcome': 'failure', 'failure_modes': ['parse error'], 'output_summary': 'Could not parse JSON from response', 'raw_response': raw}
 data['task_id'] = '$task_id'
 data['epoch'] = $EPOCH
 open('$output_file', 'w').write(json.dumps(data, indent=2))
 print(f'    Wrote: $output_file')
 " 2>/dev/null || echo "    Warning: Could not parse rollout output for $task_id"
-        done
+        done <<< "$train_tasks"
 
-        # Re-count
+        # Re-count. Enable nullglob so an unmatched pattern expands to an
+        # empty array instead of a literal glob string.
         completed=0
-        if ls "$rollout_dir/epoch-$EPOCH-"*.json &>/dev/null; then
-            for f in "$rollout_dir/epoch-$EPOCH-"*.json; do
-                [[ -f "$f" ]] && completed=$((completed + 1))
-            done
-        fi
+        shopt -s nullglob
+        rollout_files=("$rollout_dir/epoch-$EPOCH-"*.json)
+        completed=${#rollout_files[@]}
+        shopt -u nullglob
         echo ""
         echo "Rollout complete: $completed records written."
     else
@@ -219,16 +227,18 @@ run_reflect() {
     local reflect_dir="$STATE_DIR/reflections"
     mkdir -p "$reflect_dir"
 
-    local rollout_files
-    rollout_files=$(ls "$rollout_dir"/epoch-"$EPOCH"-*.json 2>/dev/null || true)
-    if [[ -z "$rollout_files" ]]; then
+    local rollout_files=()
+    shopt -s nullglob
+    rollout_files=("$rollout_dir"/epoch-"$EPOCH"-*.json)
+    shopt -u nullglob
+    if [[ ${#rollout_files[@]} -eq 0 ]]; then
         echo "ERROR: No rollout records found for epoch $EPOCH."
         echo "Run rollout phase first."
         exit 1
     fi
 
     local count
-    count=$(echo "$rollout_files" | wc -l | tr -d ' ')
+    count=${#rollout_files[@]}
     echo "Reflecting on $count rollout records..."
     echo ""
 
@@ -274,20 +284,21 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
+        result=$(run_hermes_prompt "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
+raw = sys.stdin.read()
 try:
-    data = json.loads(sys.stdin.read())
-except:
-    data = {'epoch': $EPOCH, 'error': 'parse failure', 'raw': sys.stdin.read()}
+    data = json.loads(raw)
+except Exception:
+    data = {'epoch': $EPOCH, 'error': 'parse failure', 'raw': raw}
 open('$reflect_dir/epoch-$EPOCH.json', 'w').write(json.dumps(data, indent=2))
 print(f'  Reflection written: $reflect_dir/epoch-$EPOCH.json')
 " 2>/dev/null || echo "  Warning: Could not parse reflection output"
     else
         echo "To generate a reflection, run with --exec or:"
-        echo "  $HERMES oneshot -z -m \"Review the rollout records in \$SKILLOPT_DIR/$SKILL_NAME/rollouts/ and produce a structured reflection\""
+        echo "  $HERMES chat -Q -q \"Review the rollout records in \$SKILLOPT_DIR/$SKILL_NAME/rollouts/ and produce a structured reflection\""
         echo ""
         echo "Input files: $rollout_dir/epoch-$EPOCH-*.json"
         echo "Output: $reflect_dir/epoch-$EPOCH.json"
@@ -350,14 +361,15 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
+        result=$(run_hermes_prompt "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
+raw = sys.stdin.read()
 try:
-    data = json.loads(sys.stdin.read())
-except:
-    data = {'epoch': $EPOCH, 'error': 'parse failure'}
+    data = json.loads(raw)
+except Exception:
+    data = {'epoch': $EPOCH, 'error': 'parse failure', 'raw': raw}
 open('$proposal_dir/epoch-$EPOCH.json', 'w').write(json.dumps(data, indent=2))
 proposals = data.get('proposals', [])
 print(f'  Proposals written: $proposal_dir/epoch-$EPOCH.json ({len(proposals)} edits)')
@@ -423,10 +435,11 @@ print(json.dumps(suite.get('validation', []), indent=2))
         export VAL_TASKS_FILE="$tmp_val"
         export EPOCH_VAL="$EPOCH"
         export TARGET_PATH="$TARGET"
+        export HERMES_BIN="$HERMES"
         export VAL_DIR="$STATE_DIR/validation-results"
 
         python3 << 'PYEOF'
-import json, os, subprocess, sys
+import json, os, shlex, subprocess, sys
 
 # Read from temp files (avoids env var size limits for large JSON)
 with open(os.environ['PROPOSALS_FILE']) as f:
@@ -479,10 +492,8 @@ Does this skill successfully handle this task? Respond with ONLY a JSON object:
 {{"pass": true/false, "reason": "brief explanation"}}"""
 
         try:
-            result = subprocess.run(
-                ['hermes', 'oneshot', '-z', '-m', prompt],
-                capture_output=True, text=True, timeout=120
-            )
+            cmd = shlex.split(os.environ.get('HERMES_BIN', 'hermes')) + ['chat', '-Q', '-q', prompt]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
             try:
                 verdict = json.loads(result.stdout.strip())
             except:
@@ -563,9 +574,11 @@ run_merge() {
     local validation_dir="$STATE_DIR/validation-results"
     local snapshots_dir="$STATE_DIR/snapshots"
 
-    local accepted_files
-    accepted_files=$(ls "$validation_dir"/epoch-"$EPOCH"-*.json 2>/dev/null || true)
-    if [[ -z "$accepted_files" ]]; then
+    local accepted_files=()
+    shopt -s nullglob
+    accepted_files=("$validation_dir"/epoch-"$EPOCH"-*.json)
+    shopt -u nullglob
+    if [[ ${#accepted_files[@]} -eq 0 ]]; then
         echo "ERROR: No validation results found for epoch $EPOCH."
         echo "Run validate phase first."
         exit 1
@@ -574,6 +587,7 @@ run_merge() {
     if [[ "$EXEC" == true ]]; then
         export EPOCH="$EPOCH"
         export TARGET_PATH="$TARGET"
+        export HERMES_BIN="$HERMES"
         export VAL_DIR="$STATE_DIR/validation-results"
         export SNAPSHOTS_DIR="$STATE_DIR/snapshots"
         export STATE_DIR="$STATE_DIR"
@@ -591,7 +605,8 @@ with open(target) as f:
     skill = f.read()
 
 # Snapshot before merge
-snapshot = os.path.join(snapshots_dir, f"pre-merge-epoch-{epoch}-$(date +%Y%m%d-%H%M%S).md")
+ts = datetime.datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+snapshot = os.path.join(snapshots_dir, f"pre-merge-epoch-{epoch}-{ts}.md")
 with open(snapshot, 'w') as f:
     f.write(skill)
 
@@ -611,8 +626,8 @@ for f in sorted(glob.glob(os.path.join(val_dir, f"epoch-{epoch}-*.json"))):
             for p in proposals.get('proposals', []):
                 if p.get('id') == proposal_id:
                     edit_type = p.get('type', 'replace')
-                    old_text = p.get('old_text', '')
-                    new_text = p.get('new_text', '')
+                    old_text = p.get('old_text') or ''
+                    new_text = p.get('new_text') or ''
                     if edit_type == 'replace' and old_text:
                         skill = skill.replace(old_text, new_text, 1)
                         print(f"  Applied: {proposal_id} ({edit_type})")
@@ -786,14 +801,15 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
+        result=$(run_hermes_prompt "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
+raw = sys.stdin.read()
 try:
-    data = json.loads(sys.stdin.read())
-except:
-    data = {'epoch': $EPOCH, 'error': 'parse failure'}
+    data = json.loads(raw)
+except Exception:
+    data = {'epoch': $EPOCH, 'error': 'parse failure', 'raw': raw}
 open('$reflect_dir/slow-meta-epoch-$EPOCH.json', 'w').write(json.dumps(data, indent=2))
 rec = data.get('recommendation', 'unknown')
 print(f'  Meta-reflection written: $reflect_dir/slow-meta-epoch-$EPOCH.json')

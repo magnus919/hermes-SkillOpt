@@ -26,8 +26,8 @@ When a user says they want to optimize a skill:
 1. Load this skill with `skill_view(name='skillopt')` to access the methodology
 2. Guide the user through defining 3-5 training and 3-5 validation tasks
 3. Call `hermes kanban boards create` with the proper slug and description
-4. Create rollout tasks with `hermes kanban create "Rollout: ..." --body "..." --priority high`
-5. Run each phase: rollouts via `hermes oneshot`, reflections by reviewing artifacts, proposals by analyzing failure patterns, validation by comparing before/after metrics
+4. Create rollout tasks with `hermes kanban create "Rollout: ..." --body "..." --priority 3`
+5. Run each phase: rollouts via `hermes chat -Q -q`, reflections by reviewing artifacts, proposals by analyzing failure patterns, validation by comparing before/after metrics
 6. Apply accepted edits to the target skill file
 7. Report results conversationally
 
@@ -36,8 +36,8 @@ When a user says they want to optimize a skill:
 - All shell scripts use `set -euo pipefail`
 - Script names are `kebab-case.sh`
 - Phase artifact JSON schemas are documented in `references/artifact-formats.md`
-- Board slugs follow `SkillOpt-<skill-name>` format
-- State directories follow `~/.hermes/SkillOpt/<skill-name>/`
+- Board slugs follow `skillopt-<skill-slug>` format, where `<skill-slug>` is lowercase kebab-case
+- State directories follow `~/.hermes/SkillOpt/<skill-slug>/`
 
 ## Change Workflow
 
