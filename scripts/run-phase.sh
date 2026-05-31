@@ -166,7 +166,7 @@ Output ONLY a JSON object with these fields:
 - output_summary: string"
 
             local result
-            result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"outcome": "failure", "failure_modes": ["execution error"], "output_summary": "oneshot command failed"}')
+            result=$("$HERMES" -z "$prompt" 2>>"$ERROR_LOG" || echo '{"outcome": "failure", "failure_modes": ["execution error"], "output_summary": "oneshot command failed"}')
 
             # Try to extract JSON from the response
             echo "$result" | python3 -c "
@@ -274,7 +274,7 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
+        result=$("$HERMES" -z "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
@@ -287,7 +287,7 @@ print(f'  Reflection written: $reflect_dir/epoch-$EPOCH.json')
 " 2>/dev/null || echo "  Warning: Could not parse reflection output"
     else
         echo "To generate a reflection, run with --exec or:"
-        echo "  $HERMES oneshot -z -m \"Review the rollout records in \$SKILLOPT_DIR/$SKILL_NAME/rollouts/ and produce a structured reflection\""
+        echo "  $HERMES -z \"Review the rollout records in \$SKILLOPT_DIR/$SKILL_NAME/rollouts/ and produce a structured reflection\""
         echo ""
         echo "Input files: $rollout_dir/epoch-$EPOCH-*.json"
         echo "Output: $reflect_dir/epoch-$EPOCH.json"
@@ -350,7 +350,7 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
+        result=$("$HERMES" -z "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
@@ -424,9 +424,10 @@ print(json.dumps(suite.get('validation', []), indent=2))
         export EPOCH_VAL="$EPOCH"
         export TARGET_PATH="$TARGET"
         export VAL_DIR="$STATE_DIR/validation-results"
+        export HERMES_BIN="$HERMES"
 
         python3 << 'PYEOF'
-import json, os, subprocess, sys
+import json, os, shlex, subprocess, sys
 
 # Read from temp files (avoids env var size limits for large JSON)
 with open(os.environ['PROPOSALS_FILE']) as f:
@@ -438,9 +439,48 @@ with open(os.environ['VAL_TASKS_FILE']) as f:
 epoch = os.environ.get('EPOCH_VAL', '1')
 target = os.environ.get('TARGET_PATH', '')
 val_dir = os.environ.get('VAL_DIR', '')
+hermes_cmd = shlex.split(os.environ.get('HERMES_BIN', 'hermes')) or ['hermes']
 
 edits = proposals.get('proposals', [])
 results = []
+
+def score_skill(skill_text):
+    """Run every validation task against a given skill text; return (pass_rate, details)."""
+    passed = 0
+    details = []
+    for task in val_tasks:
+        task_id = task.get('id', 'unknown')
+        task_inst = task.get('instruction', '')
+        prompt = f"""Evaluate this skill document against the following task.
+
+=== SKILL DOCUMENT ===
+{skill_text}
+
+=== TASK ===
+{task_inst}
+
+Does this skill successfully handle this task? Respond with ONLY a JSON object:
+{{"pass": true/false, "reason": "brief explanation"}}"""
+        try:
+            result = subprocess.run(
+                [*hermes_cmd, '-z', prompt],
+                capture_output=True, text=True, timeout=180
+            )
+            try:
+                verdict = json.loads(result.stdout.strip())
+            except:
+                verdict = {"pass": False, "reason": "parse error"}
+            if verdict.get("pass", False):
+                passed += 1
+            details.append({"task_id": task_id, "result": verdict})
+        except:
+            details.append({"task_id": task_id, "result": {"pass": False, "reason": "execution error"}})
+    total = len(val_tasks)
+    return (passed / total if total > 0 else 0.0), details, passed, total - passed
+
+# Real validation gate: measure the UNEDITED skill once as the baseline.
+baseline_rate, baseline_details, _, _ = score_skill(skill_content)
+print(f"  Baseline (unedited skill) pass rate: {baseline_rate:.0%}")
 
 for i, edit in enumerate(edits):
     edit_id = edit.get('id', f'edit-{i+1}')
@@ -458,56 +498,23 @@ for i, edit in enumerate(edits):
     elif edit_type == 'delete' and old_text:
         edited_skill = skill_content.replace(old_text, '', 1)
 
-    # Run each validation task against the edited skill
-    val_passed = 0
-    val_failed = 0
-    val_details = []
-
-    for task in val_tasks:
-        task_id = task.get('id', 'unknown')
-        task_inst = task.get('instruction', '')
-
-        prompt = f"""Evaluate this skill document against the following task.
-
-=== EDITED SKILL DOCUMENT ===
-{edited_skill}
-
-=== TASK ===
-{task_inst}
-
-Does this skill successfully handle this task? Respond with ONLY a JSON object:
-{{"pass": true/false, "reason": "brief explanation"}}"""
-
-        try:
-            result = subprocess.run(
-                ['hermes', 'oneshot', '-z', '-m', prompt],
-                capture_output=True, text=True, timeout=120
-            )
-            try:
-                verdict = json.loads(result.stdout.strip())
-            except:
-                verdict = {"pass": False, "reason": "parse error"}
-
-            if verdict.get("pass", False):
-                val_passed += 1
-            else:
-                val_failed += 1
-            val_details.append({"task_id": task_id, "result": verdict})
-        except:
-            val_failed += 1
-            val_details.append({"task_id": task_id, "result": {"pass": False, "reason": "execution error"}})
-
+    pass_rate, val_details, val_passed, val_failed = score_skill(edited_skill)
     total = len(val_tasks)
-    pass_rate = val_passed / total if total > 0 else 0
+
+    # Accept only if the edit demonstrably improves or maintains held-out performance.
+    verdict = "accepted" if pass_rate >= baseline_rate and pass_rate > 0 else "rejected"
+    delta = round(pass_rate - baseline_rate, 2)
 
     result_record = {
         "epoch": epoch,
         "proposal_id": edit_id,
         "edit_type": edit_type,
         "validation_tasks_run": total,
-        "baseline_metrics": {"pass_rate": 0.0},
+        "baseline_metrics": {"pass_rate": round(baseline_rate, 2)},
         "post_edit_metrics": {"pass_rate": round(pass_rate, 2)},
-        "verdict": "accepted" if pass_rate >= 0.5 else "rejected",
+        "verdict": verdict,
+        "delta": f"{delta:+.2f} pass rate",
+        "baseline_detail": baseline_details,
         "validation_detail": val_details
     }
 
@@ -786,7 +793,7 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" oneshot -z -m "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
+        result=$("$HERMES" -z "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
