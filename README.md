@@ -40,7 +40,7 @@ Each phase:
 
 ### The Validation-Gate Principle
 
-Training and validation task sets MUST be distinct. Edits are only accepted if they demonstrably improve or maintain performance on unseen tasks. This is the non-negotiable methodological requirement.
+Training and validation task sets MUST be distinct. Edits are only accepted if they demonstrably improve or maintain performance on unseen tasks. Current validation is multi-objective: pass/fail is the hard primary gate, then output quality, completion speed, and token efficiency are combined into a weighted score.
 
 ## Quick Start
 
@@ -80,7 +80,8 @@ hermes-SkillOpt/
 │   ├── methodology-guide.md  # Deep rationale for every phase
 │   ├── test-suite-design.md  # How to pick training/validation tasks
 │   ├── artifact-formats.md   # JSON schemas for all phase outputs
-│   └── getting-started.md    # Walkthrough from install to completion
+│   ├── command-syntax-verification.md  # End-to-end checks for CLI examples in proposed edits
+│   └── tool-bugs-during-validation.md  # How to triage tool bugs surfaced by validation
 └── templates/
     ├── board.json             # Kanban board spec
     └── test-suite.json        # Test suite JSON schema

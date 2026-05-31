@@ -3,24 +3,49 @@
     "title": "SkillOpt Combined Test Suite",
     "description": "Combined training and validation task definitions for a SkillOpt optimization run. seed-board.sh produces this format (not the per-type split schema).",
     "type": "object",
-    "required": ["training", "validation", "created_at", "skill_target"],
+    "required": [
+        "training",
+        "validation",
+        "created_at",
+        "skill_target"
+    ],
     "properties": {
         "training": {
             "type": "array",
             "minItems": 1,
-            "description": "Training tasks — used to generate rollout trajectories and identify failure patterns",
+            "description": "Training tasks \u2014 used to generate rollout trajectories and identify failure patterns",
             "items": {
                 "type": "object",
-                "required": ["id", "instruction"],
+                "required": [
+                    "id",
+                    "instruction"
+                ],
                 "properties": {
-                    "id": {"type": "string", "description": "Unique task identifier (e.g. 'train-1')"},
-                    "instruction": {"type": "string", "description": "What the LLM should execute"},
-                    "input_data": {"type": "string", "description": "Optional input data for the task"},
-                    "expected_outcome": {"type": "string", "description": "What success looks like"},
-                    "success_criteria": {"type": "string", "description": "How to evaluate the output"},
+                    "id": {
+                        "type": "string",
+                        "description": "Unique task identifier (e.g. 'train-1')"
+                    },
+                    "instruction": {
+                        "type": "string",
+                        "description": "What the LLM should execute"
+                    },
+                    "input_data": {
+                        "type": "string",
+                        "description": "Optional input data for the task"
+                    },
+                    "expected_outcome": {
+                        "type": "string",
+                        "description": "What success looks like"
+                    },
+                    "success_criteria": {
+                        "type": "string",
+                        "description": "How to evaluate the output"
+                    },
                     "tags": {
                         "type": "array",
-                        "items": {"type": "string"},
+                        "items": {
+                            "type": "string"
+                        },
                         "description": "Tags for categorizing tasks"
                     }
                 }
@@ -29,19 +54,39 @@
         "validation": {
             "type": "array",
             "minItems": 1,
-            "description": "Held-out validation tasks — used to test edits. Must be distinct from training tasks.",
+            "description": "Held-out validation tasks \u2014 used to test edits. Must be distinct from training tasks.",
             "items": {
                 "type": "object",
-                "required": ["id", "instruction"],
+                "required": [
+                    "id",
+                    "instruction"
+                ],
                 "properties": {
-                    "id": {"type": "string", "description": "Unique task identifier (e.g. 'val-1')"},
-                    "instruction": {"type": "string", "description": "What the LLM should execute"},
-                    "input_data": {"type": "string", "description": "Optional input data"},
-                    "expected_outcome": {"type": "string", "description": "What success looks like"},
-                    "success_criteria": {"type": "string", "description": "How to evaluate the output"},
+                    "id": {
+                        "type": "string",
+                        "description": "Unique task identifier (e.g. 'val-1')"
+                    },
+                    "instruction": {
+                        "type": "string",
+                        "description": "What the LLM should execute"
+                    },
+                    "input_data": {
+                        "type": "string",
+                        "description": "Optional input data"
+                    },
+                    "expected_outcome": {
+                        "type": "string",
+                        "description": "What success looks like"
+                    },
+                    "success_criteria": {
+                        "type": "string",
+                        "description": "How to evaluate the output"
+                    },
                     "tags": {
                         "type": "array",
-                        "items": {"type": "string"},
+                        "items": {
+                            "type": "string"
+                        },
                         "description": "Tags for categorizing tasks"
                     }
                 }
@@ -55,6 +100,33 @@
         "skill_target": {
             "type": "string",
             "description": "Absolute path to the target SKILL.md file"
+        },
+        "metric_weights": {
+            "type": "object",
+            "description": "Optional override for validation weights. Board metadata overrides these when both exist.",
+            "properties": {
+                "pass_rate": {
+                    "type": "number",
+                    "default": 0.55,
+                    "minimum": 0
+                },
+                "quality_score": {
+                    "type": "number",
+                    "default": 0.3,
+                    "minimum": 0
+                },
+                "speed_score": {
+                    "type": "number",
+                    "default": 0.1,
+                    "minimum": 0
+                },
+                "token_efficiency": {
+                    "type": "number",
+                    "default": 0.05,
+                    "minimum": 0
+                }
+            },
+            "additionalProperties": false
         }
     }
 }

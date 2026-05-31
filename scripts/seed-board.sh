@@ -145,9 +145,7 @@ fi
 
 # Write test suite definition — write JSON to temp files to avoid injection in triple-quoted strings
 TEST_SUITE_FILE="$SKILLOPT_DIR/$SKILL_NAME/test-suite.json"
-local tmp_train
 tmp_train=$(mktemp)
-local tmp_val
 tmp_val=$(mktemp)
 echo "$TRAIN_TASKS" > "$tmp_train"
 echo "$VAL_TASKS" > "$tmp_val"
@@ -180,6 +178,15 @@ cat > "$SKILLOPT_DIR/$SKILL_NAME/board-metadata.json" << EOF
     "training_count": $TRAINING_COUNT,
     "validation_count": $VALIDATION_COUNT,
     "edit_budget": $EDIT_BUDGET,
+    "initial_edit_budget": $EDIT_BUDGET,
+    "budget_floor": 2,
+    "max_epochs": 4,
+    "metric_weights": {
+        "pass_rate": 0.55,
+        "quality_score": 0.30,
+        "speed_score": 0.10,
+        "token_efficiency": 0.05
+    },
     "epoch": 1,
     "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
     "baseline_snapshot": "$SNAPSHOT_FILE",
@@ -212,7 +219,7 @@ for i, task in enumerate(tasks):
     case "$line" in
         TASK:*) CURRENT_TASK="${line#TASK:}";;
         DESC:*)
-            local body_file
+            DESC="${line#DESC:}"
             body_file=$(mktemp)
             cat > "$body_file" << BODYEOF
 Rollout task ${CURRENT_TASK} for '${SKILL_NAME}' (epoch 1).
@@ -237,7 +244,7 @@ done
 
 # Create validation baseline task
 "$HERMES" kanban create "Validation: establish baseline metrics" \
-    --body "Run the $VALIDATION_COUNT validation tasks (defined in $TEST_SUITE_FILE) with the current skill at $TARGET. Record metrics as the baseline for future comparison.
+    --body "Run the $VALIDATION_COUNT validation tasks (defined in $TEST_SUITE_FILE) with the current skill at $TARGET. Record pass/fail, quality score, speed, token estimate, and weighted score as the baseline for future comparison.
 
 State: $SKILLOPT_DIR/$SKILL_NAME/validation-results/baseline.json" \
     --priority 1 \

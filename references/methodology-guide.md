@@ -18,6 +18,8 @@ Unconstrained skill editing is like setting the learning rate to infinity — th
 
 This is the heart of the methodology. The SkillLens paper proves that evaluating skill quality by reading the text is worse than useless — LLM judges are 46.4% worse than chance at distinguishing effective from ineffective skills. The validation gate is the only reliable signal. It directly measures what matters: does the edited skill produce better task outcomes on unseen data?
 
+SkillOpt should not collapse "better" to pass/fail alone. Pass/fail remains the primary hard gate, but useful skill changes also affect output quality, completion speed, and token use. The local runner computes a weighted score from pass rate, `quality_score`, measured duration, and token estimate, with pass/fail weighted highest.
+
 ### Merge — Lock in Gains
 
 Each accepted edit is a verified improvement. Merging them one epoch at a time creates a monotonic improvement trajectory — the skill never gets worse. This is the textual analogue of gradient descent's monotonic improvement property (with a small enough learning rate).

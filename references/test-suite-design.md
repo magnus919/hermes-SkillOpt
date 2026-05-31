@@ -18,6 +18,19 @@ This is the non-negotiable methodological requirement. If you can't define 3 dis
 
 For the first run, start with the Small configuration. A full 4-epoch cycle completes quickly and tells you whether the methodology is providing signal for this skill.
 
+## Metric Design
+
+Each validation task should define both a hard pass/fail condition and a quality rubric. The runner records four weighted criteria, in priority order:
+
+1. `pass_rate` — hard task success/failure; any regression rejects the edit.
+2. `quality_score` — 0.0-1.0 score for minute output quality among outputs with the same pass/fail status.
+3. `speed_score` — derived from measured wall-clock completion time; faster is better.
+4. `token_efficiency` — derived from token usage when reported, otherwise a chars/4 heuristic including the skill text; fewer tokens is better.
+
+Default weights are `0.55 / 0.30 / 0.10 / 0.05`. Override them in `board-metadata.json` or `test-suite.json` under `metric_weights` only when the skill genuinely needs a different tradeoff.
+
+A good validation task describes what earns a high quality score, not just what passes. Example: "Pass if the answer identifies the correct CLI command. Quality: 1.0 if it also explains flags, failure modes, and a verification command; 0.5 if it only gives the command."
+
 ## Choosing Tasks by Skill Type
 
 ### Research / Retrieval Skills (e.g., `groktocrawl agent`, `arxiv-search`)
