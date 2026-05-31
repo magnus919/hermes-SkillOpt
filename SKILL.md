@@ -4,7 +4,7 @@ description: Run controlled skill optimization cycles on any skill document. Use
 version: 1.0.0-alpha
 author: Jasper (on behalf of Magnus Hedemark)
 license: MIT
-compatibility: Hermes Agent only — uses hermes kanban and hermes oneshot — not compatible with Claude Code, Copilot, OpenCode, or Cursor
+compatibility: Hermes Agent only — uses hermes kanban and hermes -z — not compatible with Claude Code, Copilot, OpenCode, or Cursor
 platforms: [linux, macos, windows]
 metadata:
   hermes:
@@ -30,7 +30,9 @@ Optimize any Hermes skill document using a rigorous, methodology-driven pipeline
 
 ## How It Works
 
-SkillOpt treats a skill document like a parameter vector in text-space. Instead of gradient descent, it uses a six-phase **kanban pipeline** that runs on your Hermes Agent's existing infrastructure:
+SkillOpt treats a single target file — normally a skill's `SKILL.md` — like a parameter vector in text-space. The current runner does **not** automatically edit related `references/`, `scripts/`, `templates/`, or `assets/` files. Those files may influence task execution if the skill tells the agent to read or run them, but proposed edits and merges are applied only to the configured target file.
+
+Instead of gradient descent, it uses a six-phase **kanban pipeline** that runs on your Hermes Agent's existing infrastructure:
 
 ```
 Backlog → Rollout → Reflect → Propose → Validate → Merge → Done
@@ -46,6 +48,8 @@ Each phase produces structured artifacts. Downstream phases read these artifacts
 The single most important idea in this skill comes from the companion SkillLens paper (arXiv 2605.23899): **surface plausibility is not predictive of skill effectiveness.** LLM judges are 46.4% worse than chance at distinguishing effective from ineffective skills by reading them. Format has no significant effect (p > 0.34).
 
 This means: **do not evaluate skill changes by reading the skill.** Evaluate by running it. The validation gate — a held-out set of tasks that the skill has never seen — is the only reliable quality signal.
+
+The current validation gate is multi-objective. It treats pass/fail as the hard primary criterion, then scores output quality, completion speed, and token utilization with configurable weights. Default weights are: pass rate 0.55, output quality 0.30, speed 0.10, token efficiency 0.05. Edits that reduce pass rate are rejected; edits with the same pass rate must not regress the weighted score.
 
 Training and validation task sets MUST be distinct. This is not optional.
 
@@ -74,9 +78,9 @@ Based on the reflection, propose 1-4 specific, targeted edits to the skill docum
 
 #### 4. Validate — Test each edit against held-out tasks
 
-This is the heart of the methodology. Apply each proposed edit to a copy of the skill. Run the validation task suite with the edited skill. Compare against the baseline metrics. Accept edits that improve or maintain performance. Reject the rest.
+This is the heart of the methodology. Apply each proposed edit to a copy of the skill. Run the validation task suite with the edited skill. Compare against the baseline metrics: pass/fail, output quality, completion speed, and token utilization. Accept edits that keep pass rate from regressing and improve or maintain the weighted score. Reject the rest.
 
-**Entry:** Proposed edits + validation task suite + baseline metrics
+**Entry:** Proposed edits + validation task suite + multi-objective baseline metrics
 **Exit:** Accepted edits (merged into deployment candidate) + rejected edits (stored in buffer with rationale and metrics)
 
 #### 5. Merge — Deploy accepted changes
@@ -98,11 +102,11 @@ The optimizer reflects on the accumulated rejected-edit buffer — all proposals
 A full optimization run consists of up to 4 epochs by default. Each epoch follows the Rollout → Reflect → Propose → Validate → Merge cycle.
 
 - **Default starting edit budget:** 4 edits per epoch (matching the paper's optimal Lt=4)
-- **Budget decay:** Cosine decay applied after each merge, reducing the budget toward a floor of 2 edits. The decay formula is: `budget = floor + (initial - floor) × (1 + cos(π × t / max_epochs)) / 2` where `t` is the current epoch.
-- **Plateau detection:** After each merge, validation pass rates are tracked in `board-metadata.json` under `pass_rate_history`. If pass rates show no improvement over 3 consecutive epochs, the slow-meta phase is triggered early — before reaching epoch 4. Epoch 4 always triggers the slow-meta phase regardless of pass rate trends.
+- **Budget decay:** Cosine decay applied after each merge, reducing the budget toward a floor of 2 edits. The decay formula is: `budget = floor + (initial - floor) × (1 + cos(π × t / max_epochs)) / 2`, where `t` is the number of completed epochs.
+- **Plateau detection:** After each merge, validation metric history is tracked in `board-metadata.json` under `validation_metric_history` and `pass_rate_history`. If weighted score/pass rate show no improvement over 3 consecutive epochs, the slow-meta phase is triggered early — before reaching epoch 4. Epoch 4 always triggers the slow-meta phase regardless of metric trends.
 - **Early termination:** If the slow-meta phase recommends archiving, the run can be ended before epoch 4. If it recommends continuing, a new epoch cycle begins at the current decayed budget level.
 
-The edit budget is configurable in `board-metadata.json` under `edit_budget`. The `compute_budget()` function in `scripts/run-phase.sh` handles the cosine decay calculation automatically.
+The edit budget is configurable in `board-metadata.json` under `edit_budget`; the initial value is preserved as `initial_edit_budget` for decay calculations. Validation metric weights are configurable under `metric_weights` with default weights `{pass_rate: 0.55, quality_score: 0.30, speed_score: 0.10, token_efficiency: 0.05}`.
 
 ## Quick Start
 
@@ -121,7 +125,7 @@ The edit budget is configurable in `board-metadata.json` under `edit_budget`. Th
 
 ## Scripts — Power Users Only
 
-The primary interface for SkillOpt is conversational — your agent drives the pipeline. These shell scripts exist for power users who want to run phases from the command line instead. The agent ignores them and uses `hermes oneshot` + `hermes kanban` directly.
+The primary interface for SkillOpt is conversational — your agent drives the pipeline. These shell scripts exist for power users who want to run phases from the command line instead. The agent uses `hermes -z`/`--oneshot` + `hermes kanban` directly.
 
 | Script | What it does | 
 |--------|-------------|
@@ -157,6 +161,8 @@ The primary interface for SkillOpt is conversational — your agent drives the p
 
 5. **The optimizer and target can be the same model.** The paper shows same-model optimization still produces strong gains. A more capable optimizer helps, but it's not required.
 
+6. **Validation is multi-objective.** Pass/fail is the primary hard gate, but it is not the only signal. Held-out tasks should also report `quality_score` for minute output quality. The runner measures speed and heuristic token use, then computes a weighted score. Do not accept a same-pass-rate edit that makes quality, speed, or token use materially worse.
+
 ## Pitfalls
 
 - **Not separating training and validation sets.** This is the most common mistake and the most damaging. If your validation tasks overlap with training tasks, the validation gate tells you nothing about generalization.
@@ -165,7 +171,7 @@ The primary interface for SkillOpt is conversational — your agent drives the p
 
 - **Unbounded edits.** An optimizer that can rewrite the entire skill will introduce skill drift — removing working patterns while trying to fix failures. The bounded-edit strategy exists for this reason.
 
-- **Ignoring the slow-meta recommendation.** After epoch 4 or when plateau detection triggers (no pass rate improvement over 3 consecutive epochs), the slow-meta phase recommends either continuing or archiving. If it recommends archiving, continuing to run epochs wastes compute and risks overfitting. The scripts will guide the user to slow-meta automatically — follow the recommendation.
+- **Ignoring the slow-meta recommendation.** After epoch 4 or when plateau detection triggers (no weighted-score/pass-rate improvement over 3 consecutive epochs), the slow-meta phase recommends either continuing or archiving. If it recommends archiving, continuing to run epochs wastes compute and risks overfitting. The scripts guide the user to slow-meta automatically — follow the recommendation.
 
 - **Combined code + skill fixes:** Epoch 2 of the GroktoCrawl optimization demonstrated a two-layer fix: a code bug (CLI parsing) and a skill documentation gap (missing browser fallback guidance). When validation consistently fails on one task type (e.g., all search tasks), check for a tool bug BEFORE proposing skill edits. Fix the tool, re-run validation, then observe whether the skill edits meaningfully changed outcomes. The tool bug fix may resolve the validation failures independently — the skill edit adds long-term user guidance, not correctness.
 
@@ -183,6 +189,8 @@ The rule: **when a proposed edit adds or changes command-line examples, test eve
 4. If the edit contains only prose changes (no command examples), this step is unnecessary
 
 This is a special case of the surface-plausibility trap: command syntax that reads correctly in text may not execute correctly, and the validation gate doesn't automatically test prose examples for syntactic accuracy against the live CLI.
+
+- **Large skill documents must be passed by path, not inlined into `-z`.** Linux enforces a per-argument `MAX_ARG_STRLEN` limit that is often around 128 KiB even when `ARG_MAX` is larger. A real test against the 160 KiB `pytorch-fsdp` skill failed before Hermes started because the full SKILL.md was embedded as one `hermes -z "$prompt"` argument. Phase runners should give Hermes a skill file path and tell the agent to read it; validation of edited in-memory copies should write a temporary skill file and pass that path. Do not hide this failure with generic `execution error` records.
 
 ## Attribution
 

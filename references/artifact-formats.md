@@ -67,25 +67,58 @@ Every SkillOpt phase writes structured JSON to disk. These schemas define the co
     "proposal_id": "edit-1",
     "edit_type": "add",
     "validation_tasks_run": 3,
+    "metric_weights": {
+        "pass_rate": 0.55,
+        "quality_score": 0.30,
+        "speed_score": 0.10,
+        "token_efficiency": 0.05
+    },
     "baseline_metrics": {
         "pass_rate": 0.67,
         "tasks_passed": 2,
-        "tasks_failed": 1
+        "tasks_failed": 1,
+        "avg_quality_score": 0.71,
+        "avg_duration_seconds": 2.43,
+        "total_duration_seconds": 7.29,
+        "avg_token_estimate": 1840,
+        "total_token_estimate": 5520,
+        "speed_score": 0.2915,
+        "token_efficiency": 0.3521,
+        "weighted_score": 0.6288
     },
     "post_edit_metrics": {
         "pass_rate": 1.0,
         "tasks_passed": 3,
-        "tasks_failed": 0
+        "tasks_failed": 0,
+        "avg_quality_score": 0.88,
+        "avg_duration_seconds": 2.10,
+        "total_duration_seconds": 6.30,
+        "avg_token_estimate": 1710,
+        "total_token_estimate": 5130,
+        "speed_score": 0.3226,
+        "token_efficiency": 0.3690,
+        "weighted_score": 0.8647
     },
     "verdict": "accepted",
+    "acceptance_reason": "weighted_score_non_regression",
     "delta": "+0.33 pass rate",
+    "score_delta": "+0.2359 weighted score",
+    "quality_delta": "+0.1700 quality score",
+    "duration_delta_seconds": -0.33,
+    "token_delta_estimate": -130,
     "validation_detail": [
-        {"task_id": "validation-1", "baseline": "pass", "post_edit": "pass"},
-        {"task_id": "validation-2", "baseline": "fail", "post_edit": "pass"},
-        {"task_id": "validation-3", "baseline": "pass", "post_edit": "pass"}
+        {
+            "task_id": "validation-1",
+            "baseline": "pass",
+            "post_edit": "pass",
+            "baseline_result": {"pass": true, "quality_score": 0.82, "duration_seconds": 2.0, "token_estimate": 1600},
+            "post_edit_result": {"pass": true, "quality_score": 0.91, "duration_seconds": 1.8, "token_estimate": 1500}
+        }
     ]
 }
 ```
+
+Acceptance rule: reject any edit with lower `pass_rate` than baseline. If pass rate is unchanged or improved, accept only when `weighted_score` does not regress.
 
 ## Rejected-Edit Buffer (`rejected-buffer.json`)
 
@@ -97,9 +130,10 @@ Every SkillOpt phase writes structured JSON to disk. These schemas define the co
         "edit_type": "replace",
         "rationale": "Proposed replacing the error-handling section",
         "failure_reason": "Edit caused regressions in validation tasks 2 and 3",
-        "baseline_metrics": {"pass_rate": 0.67},
-        "post_edit_metrics": {"pass_rate": 0.33},
-        "delta": "-0.34 pass rate"
+        "baseline_metrics": {"pass_rate": 0.67, "avg_quality_score": 0.72, "weighted_score": 0.63},
+        "post_edit_metrics": {"pass_rate": 0.33, "avg_quality_score": 0.61, "weighted_score": 0.42},
+        "delta": "-0.34 pass rate",
+        "score_delta": "-0.2100 weighted score"
     }
 ]
 ```

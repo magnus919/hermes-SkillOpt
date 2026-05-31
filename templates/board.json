@@ -11,6 +11,20 @@
         "training_count": {"type": "integer", "minimum": 1},
         "validation_count": {"type": "integer", "minimum": 1},
         "edit_budget": {"type": "integer", "default": 4, "minimum": 1, "maximum": 16},
+        "initial_edit_budget": {"type": "integer", "default": 4, "minimum": 1, "maximum": 16},
+        "budget_floor": {"type": "integer", "default": 2, "minimum": 1, "maximum": 16},
+        "max_epochs": {"type": "integer", "default": 4, "minimum": 1},
+        "metric_weights": {
+            "type": "object",
+            "description": "Relative weights for multi-objective validation. Values are normalized before scoring.",
+            "properties": {
+                "pass_rate": {"type": "number", "default": 0.55, "minimum": 0},
+                "quality_score": {"type": "number", "default": 0.30, "minimum": 0},
+                "speed_score": {"type": "number", "default": 0.10, "minimum": 0},
+                "token_efficiency": {"type": "number", "default": 0.05, "minimum": 0}
+            },
+            "additionalProperties": false
+        },
         "epoch": {"type": "integer", "minimum": 1},
         "created_at": {"type": "string", "format": "date-time"},
         "baseline_snapshot": {"type": "string", "description": "Filename of the baseline snapshot"},

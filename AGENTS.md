@@ -26,8 +26,8 @@ When a user says they want to optimize a skill:
 1. Load this skill with `skill_view(name='skillopt')` to access the methodology
 2. Guide the user through defining 3-5 training and 3-5 validation tasks
 3. Call `hermes kanban boards create` with the proper slug and description
-4. Create rollout tasks with `hermes kanban create "Rollout: ..." --body "..." --priority high`
-5. Run each phase: rollouts via `hermes oneshot`, reflections by reviewing artifacts, proposals by analyzing failure patterns, validation by comparing before/after metrics
+4. Create rollout tasks with `hermes kanban create "Rollout: ..." --body "..." --priority 3`
+5. Run each phase: rollouts via `hermes -z`, reflections by reviewing artifacts, proposals by analyzing failure patterns, validation by comparing before/after pass rate, quality score, speed, and token-efficiency metrics. For large skills, pass skill paths in prompts instead of inlining full SKILL.md content to avoid Linux per-argument limits.
 6. Apply accepted edits to the target skill file
 7. Report results conversationally
 
