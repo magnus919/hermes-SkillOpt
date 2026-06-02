@@ -33,7 +33,8 @@ if [[ -z "$BOARD_SLUG" ]]; then
     show_usage
 fi
 
-SKILL_NAME="${BOARD_SLUG#SkillOpt-}"
+SKILL_NAME="${BOARD_SLUG#skillopt-}"
+SKILL_NAME="${SKILL_NAME#SkillOpt-}"
 STATE_DIR="$SKILLOPT_DIR/$SKILL_NAME"
 
 if [[ ! -f "$STATE_DIR/board-metadata.json" ]]; then

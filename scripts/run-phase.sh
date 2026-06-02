@@ -14,6 +14,7 @@ set -euo pipefail
 
 SKILLOPT_DIR="${SKILLOPT_DIR:-$HOME/.hermes/SkillOpt}"
 HERMES="${HERMES:-hermes}"
+ERROR_LOG="${SKILLOPT_DIR}/hermes-oneshot-errors.log"
 
 
 # Cosine-decayed edit budget computation.
@@ -42,6 +43,21 @@ show_usage() {
     exit 1
 }
 
+run_hermes_prompt() {
+    # Current Hermes exposes -z/--oneshot for single-prompt noninteractive runs.
+    "$HERMES" -z "$1"
+}
+
+decode_task_field() {
+    local encoded="$1"
+    local field="$2"
+    TASK_B64="$encoded" TASK_FIELD="$field" python3 -c '
+import base64, json, os
+payload = json.loads(base64.b64decode(os.environ["TASK_B64"]))
+print(payload.get(os.environ["TASK_FIELD"], ""))
+'
+}
+
 BOARD_SLUG=""
 PHASE=""
 EPOCH=""
@@ -63,7 +79,8 @@ if [[ -z "$BOARD_SLUG" || -z "$PHASE" ]]; then
     show_usage
 fi
 
-SKILL_NAME="${BOARD_SLUG#SkillOpt-}"
+SKILL_NAME="${BOARD_SLUG#skillopt-}"
+SKILL_NAME="${SKILL_NAME#SkillOpt-}"
 STATE_DIR="$SKILLOPT_DIR/$SKILL_NAME"
 METADATA_FILE="$STATE_DIR/board-metadata.json"
 
@@ -102,27 +119,38 @@ run_rollout() {
     fi
 
     local train_tasks
-    train_tasks=$(python3 -c "
-import json
-suite = json.load(open('$TEST_SUITE'))
-for t in suite.get('training', []):
-    print(f\"{t.get('id', 'unknown')}|{t.get('instruction', 'No instruction')}\")
-")
+    train_tasks=$(TEST_SUITE="$TEST_SUITE" python3 << 'PYEOF'
+import base64, json, os
+with open(os.environ["TEST_SUITE"], encoding="utf-8") as f:
+    suite = json.load(f)
+for i, task in enumerate(suite.get("training", [])):
+    payload = {
+        "id": task.get("id", f"train-{i + 1}"),
+        "instruction": task.get("instruction", "No instruction"),
+    }
+    print(base64.b64encode(json.dumps(payload).encode()).decode())
+PYEOF
+)
 
     if [[ -z "$train_tasks" ]]; then
         echo "ERROR: No training tasks defined in test suite."
         exit 1
     fi
 
+    local task_count
+    task_count=$(printf '%s\n' "$train_tasks" | python3 -c "import sys; print(sum(1 for line in sys.stdin if line.strip()))")
+
     echo "Rollout phase: execute the skill against each training task"
-    echo "Training tasks found: $(echo "$train_tasks" | wc -l | tr -d ' ')"
+    echo "Training tasks found: $task_count"
     echo ""
 
     # Check existing rollouts
     local completed=0
     local pending=0
-    while IFS='|' read -r task_id task_desc; do
-        [[ -z "$task_id" ]] && continue
+    while IFS= read -r encoded_task; do
+        [[ -z "$encoded_task" ]] && continue
+        local task_id
+        task_id=$(decode_task_field "$encoded_task" id)
         local output_file="$rollout_dir/epoch-$EPOCH-$task_id.json"
         if [[ -f "$output_file" ]]; then
             completed=$((completed + 1))
@@ -136,8 +164,12 @@ for t in suite.get('training', []):
 
     if [[ "$EXEC" == true ]]; then
         # Execute pending rollouts via hermes -z/--oneshot
-        while IFS='|' read -r task_id task_desc; do
-            [[ -z "$task_id" ]] && continue
+        while IFS= read -r encoded_task; do
+            [[ -z "$encoded_task" ]] && continue
+            local task_id
+            local task_desc
+            task_id=$(decode_task_field "$encoded_task" id)
+            task_desc=$(decode_task_field "$encoded_task" instruction)
             local output_file="$rollout_dir/epoch-$EPOCH-$task_id.json"
             [[ -f "$output_file" ]] && continue
 
@@ -168,30 +200,41 @@ Output ONLY a JSON object with these fields:
 - output_summary: string"
 
             local result
-            result=$("$HERMES" -z "$prompt")
+            result=$(run_hermes_prompt "$prompt" 2>>"$ERROR_LOG" || echo '{"outcome": "failure", "failure_modes": ["execution error"], "output_summary": "hermes -z command failed"}')
 
-            echo "$result" | python3 -c "
-import json, sys
-data = json.loads(sys.stdin.read())
-data['task_id'] = '$task_id'
-data['epoch'] = $EPOCH
-open('$output_file', 'w').write(json.dumps(data, indent=2))
-print(f'    Wrote: $output_file')
-"
+            echo "$result" | TASK_ID="$task_id" EPOCH_VAL="$EPOCH" OUTPUT_FILE="$output_file" python3 -c "
+import json, os, sys
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+except Exception:
+    data = {'outcome': 'failure', 'failure_modes': ['parse error'], 'output_summary': 'Could not parse JSON from response', 'raw_response': raw}
+data['task_id'] = os.environ['TASK_ID']
+data['epoch'] = int(os.environ['EPOCH_VAL'])
+output_file = os.environ['OUTPUT_FILE']
+open(output_file, 'w').write(json.dumps(data, indent=2))
+print(f'    Wrote: {output_file}')
+" 2>/dev/null || echo "    Warning: Could not parse rollout output for $task_id"
         done <<< "$train_tasks"
 
-        # Re-count
+        # Re-count. Enable nullglob so an unmatched pattern expands to an
+        # empty array instead of a literal glob string.
         completed=0
-        for f in "$rollout_dir/epoch-$EPOCH-"*.json; do
-            [[ -f "$f" ]] && completed=$((completed + 1))
-        done
+        shopt -s nullglob
+        rollout_files=("$rollout_dir/epoch-$EPOCH-"*.json)
+        completed=${#rollout_files[@]}
+        shopt -u nullglob
         echo ""
         echo "Rollout complete: $completed records written."
     else
         # Print guidance
         echo "To execute rollouts, run with --exec or run the following for each task:"
-        while IFS='|' read -r task_id task_desc; do
-            [[ -z "$task_id" ]] && continue
+        while IFS= read -r encoded_task; do
+            [[ -z "$encoded_task" ]] && continue
+            local task_id
+            local task_desc
+            task_id=$(decode_task_field "$encoded_task" id)
+            task_desc=$(decode_task_field "$encoded_task" instruction)
             local output_file="$rollout_dir/epoch-$EPOCH-$task_id.json"
             if [[ ! -f "$output_file" ]]; then
                 echo ""
@@ -215,16 +258,18 @@ run_reflect() {
     local reflect_dir="$STATE_DIR/reflections"
     mkdir -p "$reflect_dir"
 
-    local rollout_files
-    rollout_files=$(ls "$rollout_dir"/epoch-"$EPOCH"-*.json 2>/dev/null || true)
-    if [[ -z "$rollout_files" ]]; then
+    local rollout_files=()
+    shopt -s nullglob
+    rollout_files=("$rollout_dir"/epoch-"$EPOCH"-*.json)
+    shopt -u nullglob
+    if [[ ${#rollout_files[@]} -eq 0 ]]; then
         echo "ERROR: No rollout records found for epoch $EPOCH."
         echo "Run rollout phase first."
         exit 1
     fi
 
     local count
-    count=$(echo "$rollout_files" | wc -l | tr -d ' ')
+    count=${#rollout_files[@]}
     echo "Reflecting on $count rollout records..."
     echo ""
 
@@ -270,11 +315,15 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" -z "$prompt")
+        result=$(run_hermes_prompt "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
-data = json.loads(sys.stdin.read())
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+except Exception:
+    data = {'epoch': $EPOCH, 'error': 'parse failure', 'raw': raw}
 open('$reflect_dir/epoch-$EPOCH.json', 'w').write(json.dumps(data, indent=2))
 print(f'  Reflection written: $reflect_dir/epoch-$EPOCH.json')
 "
@@ -343,11 +392,15 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" -z "$prompt")
+        result=$(run_hermes_prompt "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
-data = json.loads(sys.stdin.read())
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+except Exception:
+    data = {'epoch': $EPOCH, 'error': 'parse failure', 'raw': raw}
 open('$proposal_dir/epoch-$EPOCH.json', 'w').write(json.dumps(data, indent=2))
 proposals = data.get('proposals', [])
 print(f'  Proposals written: $proposal_dir/epoch-$EPOCH.json ({len(proposals)} edits)')
@@ -398,7 +451,7 @@ run_validate() {
         VAL_DIR="$validation_dir" \
         HERMES="$HERMES" \
         python3 << 'PYEOF'
-import json, os, subprocess, sys, tempfile, time
+import json, os, shlex, subprocess, sys, tempfile, time
 from datetime import datetime, timezone
 
 DEFAULT_METRIC_WEIGHTS = {
@@ -578,8 +631,9 @@ Scoring guidance:
 - quality_score captures output quality within the same pass/fail bucket: completeness, specificity, correctness details, format polish, and task-specific quality criteria.
 - speed and token utilization are measured by the SkillOpt runner; do not guess them."""
 
+        cmd = shlex.split(hermes) + ["-z", prompt]
         result = subprocess.run(
-            [hermes, "-z", prompt],
+            cmd,
             capture_output=True, text=True, timeout=120
         )
         duration = time.monotonic() - started
@@ -933,9 +987,11 @@ run_merge() {
     local validation_dir="$STATE_DIR/validation-results"
     local snapshots_dir="$STATE_DIR/snapshots"
 
-    local accepted_files
-    accepted_files=$(ls "$validation_dir"/epoch-"$EPOCH"-*.json 2>/dev/null || true)
-    if [[ -z "$accepted_files" ]]; then
+    local accepted_files=()
+    shopt -s nullglob
+    accepted_files=("$validation_dir"/epoch-"$EPOCH"-*.json)
+    shopt -u nullglob
+    if [[ ${#accepted_files[@]} -eq 0 ]]; then
         echo "ERROR: No validation results found for epoch $EPOCH."
         echo "Run validate phase first."
         exit 1
@@ -1263,11 +1319,15 @@ Output ONLY a JSON object following this schema:
 }"
 
         local result
-        result=$("$HERMES" -z "$prompt")
+        result=$(run_hermes_prompt "$prompt" 2>>"$ERROR_LOG" || echo '{"error": "execution failed"}')
 
         echo "$result" | python3 -c "
 import json, sys
-data = json.loads(sys.stdin.read())
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+except Exception:
+    data = {'epoch': $EPOCH, 'error': 'parse failure', 'raw': raw}
 open('$reflect_dir/slow-meta-epoch-$EPOCH.json', 'w').write(json.dumps(data, indent=2))
 rec = data.get('recommendation', 'unknown')
 print(f'  Meta-reflection written: $reflect_dir/slow-meta-epoch-$EPOCH.json')

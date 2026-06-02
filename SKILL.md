@@ -4,7 +4,7 @@ description: Run controlled skill optimization cycles on any skill document. Use
 version: 1.0.0-alpha
 author: Jasper (on behalf of Magnus Hedemark)
 license: MIT
-compatibility: Hermes Agent only — uses hermes kanban and hermes -z — not compatible with Claude Code, Copilot, OpenCode, or Cursor
+compatibility: Hermes Agent only — uses hermes kanban and hermes -z/--oneshot — not compatible with Claude Code, Copilot, OpenCode, or Cursor
 platforms: [linux, macos, windows]
 metadata:
   hermes:
