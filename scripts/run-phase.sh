@@ -248,6 +248,26 @@ print(f'    Wrote: {output_file}')
         shopt -u nullglob
         echo ""
         echo "Rollout complete: $completed records written."
+
+        # Copy rollouts to unified pyramid and regenerate root files
+        local dossiers_dir="$STATE_DIR/03-dossiers"
+        mkdir -p "$dossiers_dir"
+        shopt -s nullglob
+        for rf in "$rollout_dir"/epoch-"$EPOCH"-*.json; do
+            local rbase
+            rbase=$(basename "$rf")
+            local rdest="$dossiers_dir/$(echo "$rbase" | sed "s/^epoch-${EPOCH}-/epoch-${EPOCH}-rollout-/")"
+            cp "$rf" "$rdest"
+        done
+        shopt -u nullglob
+        SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)" PYTHONPATH="$SCRIPTS_DIR:$PYTHONPATH" \
+            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
+import os, sys
+import pyramid_utils
+state_dir = os.environ["STATE_DIR"]
+epoch = os.environ["EPOCH"]
+pyramid_utils.update_root_pyramid(state_dir, epoch)
+PYEOF
     else
         # Print guidance
         echo "To execute rollouts, run with --exec or run the following for each task:"
@@ -269,6 +289,8 @@ print(f'    Wrote: {output_file}')
         echo ""
         echo "After completing all rollouts, run:"
         echo "  $0 --board $BOARD_SLUG --phase reflect --epoch $EPOCH"
+        echo ""
+        echo "Output: 03-dossiers/epoch-EPOCH-rollout-*.json"
     fi
 }
 
@@ -281,8 +303,14 @@ run_reflect() {
     mkdir -p "$reflect_dir"
 
     local rollout_files=()
+    # Check unified pyramid first, fall back to old directory
+    local rollout_source="$STATE_DIR/03-dossiers"
     shopt -s nullglob
-    rollout_files=("$rollout_dir"/epoch-"$EPOCH"-*.json)
+    rollout_files=("$rollout_source"/epoch-"$EPOCH"-rollout-*.json)
+    if [[ ${#rollout_files[@]} -eq 0 ]]; then
+        rollout_source="$STATE_DIR/rollouts"
+        rollout_files=("$rollout_source"/epoch-"$EPOCH"-*.json)
+    fi
     shopt -u nullglob
     if [[ ${#rollout_files[@]} -eq 0 ]]; then
         echo "ERROR: No rollout records found for epoch $EPOCH."
@@ -297,11 +325,17 @@ run_reflect() {
 
     if [[ "$EXEC" == true ]]; then
         # Aggregate rollouts into a reflection prompt
+        local rollout_glob
+        if [[ "$rollout_source" == "$STATE_DIR/03-dossiers" ]]; then
+            rollout_glob="$rollout_source/epoch-$EPOCH-rollout-*.json"
+        else
+            rollout_glob="$rollout_source/epoch-$EPOCH-*.json"
+        fi
         local rollouts_json
-        rollouts_json=$(python3 -c "
-import json, glob
+        ROLLOUT_GLOB="$rollout_glob" python3 -c "
+import json, glob, os
 records = []
-for f in sorted(glob.glob('$rollout_dir/epoch-$EPOCH-*.json')):
+for f in sorted(glob.glob(os.environ['ROLLOUT_GLOB'])):
     records.append(json.load(open(f)))
 print(json.dumps(records, indent=2))
 ")
@@ -349,6 +383,13 @@ except Exception:
 open('$reflect_dir/epoch-$EPOCH.json', 'w').write(json.dumps(data, indent=2))
 print(f'  Reflection written: $reflect_dir/epoch-$EPOCH.json')
 "
+        # Copy reflection to unified pyramid and regenerate root files
+        cp "$reflect_dir/epoch-$EPOCH.json" "$STATE_DIR/03-dossiers/epoch-$EPOCH-reflection.json"
+        SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)" PYTHONPATH="$SCRIPTS_DIR:$PYTHONPATH" \
+            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
+import os, sys; import pyramid_utils
+pyramid_utils.update_root_pyramid(os.environ["STATE_DIR"], os.environ["EPOCH"])
+PYEOF
     else
         echo "To generate a reflection, run with --exec or:"
         echo "  $HERMES -z \"Review the rollout records in \$SKILLOPT_DIR/$SKILL_NAME/rollouts/ and produce a structured reflection\""
@@ -370,7 +411,12 @@ run_propose() {
     local proposal_dir="$STATE_DIR/proposals"
     mkdir -p "$proposal_dir"
 
-    if [[ ! -f "$reflect_dir/epoch-$EPOCH.json" ]]; then
+    # Check unified pyramid first for reflection, fall back to old directory
+    local reflect_file="$STATE_DIR/03-dossiers/epoch-$EPOCH-reflection.json"
+    if [[ ! -f "$reflect_file" ]]; then
+        reflect_file="$reflect_dir/epoch-$EPOCH.json"
+    fi
+    if [[ ! -f "$reflect_file" ]]; then
         echo "ERROR: No reflection document found for epoch $EPOCH."
         echo "Run reflect phase first."
         exit 1
@@ -381,7 +427,7 @@ run_propose() {
 
     if [[ "$EXEC" == true ]]; then
         local reflection
-        reflection=$(cat "$reflect_dir/epoch-$EPOCH.json")
+        reflection=$(cat "$reflect_file")
 
         local prompt="You are proposing edits to improve a skill document based on rollout analysis.
 
@@ -427,6 +473,13 @@ open('$proposal_dir/epoch-$EPOCH.json', 'w').write(json.dumps(data, indent=2))
 proposals = data.get('proposals', [])
 print(f'  Proposals written: $proposal_dir/epoch-$EPOCH.json ({len(proposals)} edits)')
 "
+        # Copy proposals to unified pyramid and regenerate root files
+        cp "$proposal_dir/epoch-$EPOCH.json" "$STATE_DIR/03-dossiers/epoch-$EPOCH-proposals.json"
+        SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)" PYTHONPATH="$SCRIPTS_DIR:$PYTHONPATH" \
+            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
+import os, sys; import pyramid_utils
+pyramid_utils.update_root_pyramid(os.environ["STATE_DIR"], os.environ["EPOCH"])
+PYEOF
     else
         echo "To generate proposals, run with --exec or manually craft up to $EDIT_BUDGET edits."
         echo ""
@@ -914,7 +967,7 @@ def load_or_create_baseline(skill_content, val_tasks):
     # Write to unified pyramid dossiers
     os.makedirs(dossiers_dir, exist_ok=True)
     write_json(dossier_path, baseline_json)
-    update_root_pyramid(state_dir, epoch)
+    pyramid_utils.update_root_pyramid(state_dir, epoch)
 
     print(f"  Baseline written: {dossier_path} "
           f"(pass: {float(metrics.get('pass_rate', 0.0)):.0%}, "
@@ -946,123 +999,11 @@ def apply_edit(skill_content, edit):
     return skill_content, f"unknown edit type: {edit_type}"
 
 
-def update_root_pyramid(state_dir, epoch):
-    """Scan 03-dossiers/ and rewrite root-level pyramid files (00-index, 01-summary, 02-analysis).
-    Called after any phase writes new dossiers."""
-    dossiers_dir = os.path.join(state_dir, "03-dossiers")
-    os.makedirs(os.path.join(state_dir, "01-summary"), exist_ok=True)
-    os.makedirs(os.path.join(state_dir, "02-analysis"), exist_ok=True)
+# Load shared pyramid utilities
+_scripts_dir = os.path.join(os.path.dirname(os.path.dirname(val_dir)), "scripts")
+sys.path.insert(0, _scripts_dir)
+import pyramid_utils
 
-    # Discover all epoch-N-* files in dossiers
-    epochs = set()
-    phase_map = {}  # epoch -> {phase: [filenames]}
-    if os.path.isdir(dossiers_dir):
-        for fname in sorted(os.listdir(dossiers_dir)):
-            if not fname.endswith(".json"):
-                continue
-            # Parse epoch-N-phase-item.json
-            parts = fname.split("-", 2)
-            if len(parts) >= 2 and parts[0] == "epoch":
-                e = parts[1]
-                epochs.add(e)
-                phase = parts[2].split("-")[0] if len(parts) > 2 else "unknown"
-                phase_map.setdefault(e, {}).setdefault(phase, []).append(fname)
-
-    epochs_sorted = sorted(epochs, key=int)
-    created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    # Read board metadata for trajectory
-    meta_path = os.path.join(state_dir, "board-metadata.json")
-    board_meta = load_json(meta_path) if os.path.exists(meta_path) else {}
-
-    # — 00-index.md — navigation + provenance
-    index_lines = ["# SkillOpt Run", "", "## Navigation", "",
-                   "- [01-summary/findings.md](01-summary/findings.md) — L1: run summary"]
-    for e in epochs_sorted:
-        index_lines.append(
-            f"- [02-analysis/epoch-{e}-overview.md](02-analysis/epoch-{e}-overview.md) — L2: epoch {e}")
-    index_lines += ["", "## Provenance", "",
-                    f"- total_epochs: {len(epochs_sorted)}",
-                    f"- generated_by: SkillOpt unified pyramid",
-                    f"- generated_at: {created}"]
-    with open(os.path.join(state_dir, "00-index.md"), "w", encoding="utf-8") as f:
-        f.write("\n".join(index_lines) + "\n")
-
-    # — 01-summary/findings.md — L1
-    target = board_meta.get("target", "unknown")
-    skill_name = os.path.basename(os.path.dirname(target)) if target != "unknown" else "unknown"
-    history = board_meta.get("pass_rate_history", [])
-    final_pr = history[-1]["pass_rate"] if history else "N/A"
-    final_num = int(epochs_sorted[-1]) if epochs_sorted else 0
-
-    summary = f"""---
-final_epoch: {final_num}
-skill_name: {skill_name}
-target: {target}
-total_epochs: {len(epochs_sorted)}
-final_pass_rate: {final_pr}
----
-
-# Run Summary
-
-**Skill:** {skill_name}
-**Final epoch:** {final_num}
-**Total epochs:** {len(epochs_sorted)}
-
-## SOURCES (LAYER 2 NAVIGATION)
-"""
-    for e in epochs_sorted:
-        summary += f"02-analysis/epoch-{e}-overview.md\n -> Epoch {e} results\n"
-    with open(os.path.join(state_dir, "01-summary", "findings.md"), "w", encoding="utf-8") as f:
-        f.write(summary)
-
-    # — 02-analysis/epoch-trajectory.md — across-epoch trends
-    traj = ["# Epoch Trajectory", "",
-            "| Epoch | Pass Rate | Quality | Score | Accepted | Rejected |",
-            "|---|---|---|---|---|---|"]
-    for entry in history:
-        ep = entry.get("epoch", "")
-        pr = entry.get("pass_rate", "N/A")
-        # Pull quality/score from board_meta if stored; otherwise leave blank
-        traj.append(f"| {ep} | {pr} | | | {entry.get('accepted', '')} | {entry.get('rejected', '')} |")
-    traj.append("")
-    traj.append("## SOURCES (LAYER 2 NAVIGATION)")
-    for e in epochs_sorted:
-        traj.append(f"epoch-{e}-overview.md")
-        traj.append(f" -> Epoch {e} overview")
-    with open(os.path.join(state_dir, "02-analysis", "epoch-trajectory.md"), "w", encoding="utf-8") as f:
-        f.write("\n".join(traj) + "\n")
-
-    # — 02-analysis/epoch-<N>-overview.md — per epoch
-    for e in epochs_sorted:
-        phases = phase_map.get(e, {})
-        lines = [f"# Epoch {e} Overview", "",
-                 f"**Epoch:** {e}"]
-        if "baseline" in phases:
-            bfiles = phases["baseline"]
-            lines.append(f"**Baseline:** {len(bfiles)} dossier(s)")
-        if "rollout" in phases:
-            rfiles = phases["rollout"]
-            lines.append(f"**Rollout:** {len(rfiles)} task(s)")
-        if "reflection" in phases:
-            lines.append(f"**Reflection:** recorded")
-        if "proposal" in phases:
-            lines.append(f"**Proposals:** recorded")
-        if "validation" in phases:
-            vfiles = phases["validation"]
-            lines.append(f"**Validation:** {len(vfiles)} edit(s)")
-        if "slowmeta" in phases:
-            lines.append(f"**Slow-meta:** recorded")
-        lines.append("")
-        lines.append("## SOURCES (LAYER 3 NAVIGATION)")
-        for phase_name in ("rollout", "baseline", "reflection", "proposal", "validation", "slowmeta"):
-            for fname in phases.get(phase_name, []):
-                lines.append(f"03-dossiers/{fname}")
-                lines.append(f" -> {phase_name} dossier for epoch {e}")
-        with open(os.path.join(state_dir, "02-analysis", f"epoch-{e}-overview.md"), "w", encoding="utf-8") as f:
-            f.write("\n".join(lines) + "\n")
-
-    print(f"  Root pyramid updated: {os.path.join(state_dir, '00-index.md')} ({len(epochs_sorted)} epochs)")
 
 proposals = load_json(proposal_file)
 with open(target, encoding="utf-8") as f:
@@ -1210,7 +1151,7 @@ for r in results:
     if os.path.exists(src):
         import shutil
         shutil.copy2(src, dst)
-update_root_pyramid(state_dir, epoch)
+pyramid_utils.update_root_pyramid(state_dir, epoch)
 print(f"  Validation dossiers written to 03-dossiers/ ({len(results)} edits)")
 PYEOF
     else
@@ -1960,6 +1901,13 @@ rec = data.get('recommendation', 'unknown')
 print(f'  Meta-reflection written: $reflect_dir/slow-meta-epoch-$EPOCH.json')
 print(f'  Recommendation: {rec}')
 "
+        # Copy slow-meta to unified pyramid and regenerate root files
+        cp "$reflect_dir/slow-meta-epoch-$EPOCH.json" "$STATE_DIR/03-dossiers/epoch-$EPOCH-slowmeta.json"
+        SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)" PYTHONPATH="$SCRIPTS_DIR:$PYTHONPATH" \
+            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
+import os, sys; import pyramid_utils
+pyramid_utils.update_root_pyramid(os.environ["STATE_DIR"], os.environ["EPOCH"])
+PYEOF
     else
         echo "To run slow-meta, use --exec or:"
         echo "  Review the rejected-edit buffer at $buffer_file"
