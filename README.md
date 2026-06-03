@@ -81,7 +81,9 @@ hermes-SkillOpt/
 │   ├── test-suite-design.md  # How to pick training/validation tasks
 │   ├── artifact-formats.md   # JSON schemas for all phase outputs
 │   ├── command-syntax-verification.md  # End-to-end checks for CLI examples in proposed edits
-│   └── tool-bugs-during-validation.md  # How to triage tool bugs surfaced by validation
+│   ├── size-objective-compaction.md     # Token-footprint reduction without behavior regression
+│   ├── upstream-reconciliation.md       # Maintainer workflow for local/upstream compatibility reconciliation
+│   └── tool-bugs-during-validation.md   # How to triage tool bugs surfaced by validation
 └── templates/
     ├── board.json             # Kanban board spec
     └── test-suite.json        # Test suite JSON schema

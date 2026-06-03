@@ -28,6 +28,18 @@ Optimize any Hermes skill document using a rigorous, methodology-driven pipeline
 
 **SkillOpt is designed for skills with measurable task outcomes.** For creative skills (image generation, writing) where "correctness" is subjective, the methodology still works but the validation criteria need thoughtful definition.
 
+## Documentation Boundary for SkillOpt Itself
+
+When optimizing ordinary target skills, keep this `SKILL.md` focused on always-on agent operating guidance: when to run SkillOpt, phase routing, validation gates, artifact discipline, failure classification, and merge/revert rules.
+
+When maintaining or optimizing the SkillOpt repository itself, keep these surfaces separate:
+
+- `SKILL.md`: agent operating guide loaded during target-skill optimization.
+- `README.md`: public/project documentation — pitch, install/quickstart, high-level diagrams, repository structure, and research foundation.
+- `AGENTS.md` and maintainer references: upstream reconciliation, Hermes CLI compatibility checks, branch/change workflow, stub-Hermes smoke tests, runner bugs, validation blind spots, and meta-learning from SkillOpt runs.
+
+Before deleting or de-emphasizing public or maintainer material from `SKILL.md`, inspect the relevant README/AGENTS/reference files and preserve missing content there. The current runner edits one configured target file; multi-file documentation reorganizations require a sandbox candidate that validates support-file integrity before live application.
+
 ## How It Works
 
 SkillOpt treats a single target file — normally a skill's `SKILL.md` — like a parameter vector in text-space. The current runner does **not** automatically edit related `references/`, `scripts/`, `templates/`, or `assets/` files. Those files may influence task execution if the skill tells the agent to read or run them, but proposed edits and merges are applied only to the configured target file.
@@ -41,7 +53,7 @@ Backlog → Rollout → Reflect → Propose → Validate → Merge → Done
                                            (every 4 epochs)
 ```
 
-Each phase produces structured artifacts. Downstream phases read these artifacts from disk — nothing depends on LLM context retention across phases.
+Each phase produces structured artifacts. Downstream phases read these artifacts from disk — nothing depends on LLM context retention across phases. Before seeding a run, preserve the live target skill with a baseline snapshot and keep the run identity isolated: the board slug, state directory, rollout artifacts, validation results, rejected edits, metric history, and snapshots must all refer to the same current run. If a board slug or state directory already exists for the target, stop before writing artifacts; archive the old board only if that run is finished, or choose a fresh run identity.
 
 ### The Validation-Gate Principle
 
@@ -51,7 +63,7 @@ This means: **do not evaluate skill changes by reading the skill.** Evaluate by 
 
 The current validation gate is multi-objective. It treats pass/fail as the hard primary criterion, then scores output quality, completion speed, and token utilization with configurable weights. Default weights are: pass rate 0.55, output quality 0.30, speed 0.10, token efficiency 0.05. Edits that reduce pass rate are rejected; edits with the same pass rate must not regress the weighted score.
 
-Training and validation task sets MUST be distinct. This is not optional.
+Training and validation task sets MUST be distinct. This is not optional. Before rollout or validation, check task IDs and artifact paths for contamination: held-out validation evidence must come from current-run validation tasks, not old rollout artifacts, copied trajectories, or historical validation outputs unless those records are explicitly imported as historical context.
 
 ### The Six Phases
 
@@ -85,7 +97,7 @@ This is the heart of the methodology. Apply each proposed edit to a copy of the 
 
 #### 5. Merge — Deploy accepted changes
 
-Apply all accepted edits to the working skill document. Update the baseline snapshot. Increment the epoch counter. If this is epoch 4 or validation gains have plateaued, trigger the slow-meta phase.
+Apply all accepted edits to the working skill document, then run post-merge cumulative validation against the held-out validation suite. If the merged skill regresses pass rate or weighted score against the stored baseline, revert to the pre-merge snapshot and record the failed merge instead of incrementing the epoch. If the cumulative merge passes, update metadata and continue. If this is epoch 4 or validation gains have plateaued, trigger the slow-meta phase.
 
 **Entry:** Deployment candidate (accepted edits)
 **Exit:** Updated skill document + new baseline snapshot
@@ -108,24 +120,9 @@ A full optimization run consists of up to 4 epochs by default. Each epoch follow
 
 The edit budget is configurable in `board-metadata.json` under `edit_budget`; the initial value is preserved as `initial_edit_budget` for decay calculations. Validation metric weights are configurable under `metric_weights` with default weights `{pass_rate: 0.55, quality_score: 0.30, speed_score: 0.10, token_efficiency: 0.05}`.
 
-## Quick Start
-
-1. **One-time install** — clone the repo into your skills directory:
-   ```bash
-   git clone https://github.com/magnus919/hermes-SkillOpt \
-     ~/.hermes/skills/skillopt
-   ```
-
-2. **In a conversation** with your agent, say something like:
-   ```
-   I want to optimize my vault-note skill.
-   ```
-
-3. The agent loads this skill via `skill_view(name='skillopt')`, guides you through defining training and validation tasks, seeds the kanban board, and orchestrates the six-phase pipeline — reporting results at each stage.
-
 ## Scripts — Power Users Only
 
-The primary interface for SkillOpt is conversational — your agent drives the pipeline. These shell scripts exist for power users who want to run phases from the command line instead. The agent uses `hermes -z`/`--oneshot` + `hermes kanban` directly.
+The primary interface for SkillOpt is conversational — your agent drives the pipeline. These shell scripts exist for power users who want to run phases from the command line instead. The agent uses `hermes -z`/`--oneshot` + `hermes kanban` directly. Phase runners pass target skills by file path rather than embedding full `SKILL.md` contents into one shell argument; if Hermes never starts, classify that as a shell/runner failure such as `shell_argument_limit`, not as a skill-quality failure.
 
 | Script | What it does | 
 |--------|-------------|
@@ -141,6 +138,8 @@ The primary interface for SkillOpt is conversational — your agent drives the p
 | `references/test-suite-design.md` | How to pick training and validation tasks for different skill types |
 | `references/artifact-formats.md` | JSON schemas for every intermediate artifact across all phases |
 | `references/command-syntax-verification.md` | Verifying CLI command examples in proposed edits before merging — worked example from GroktoCrawl Epoch 2→3 |
+| `references/size-objective-compaction.md` | Running SkillOpt when the objective is reducing SKILL.md size/token footprint while preserving held-out task quality |
+| `references/upstream-reconciliation.md` | Maintaining SkillOpt itself against upstream while preserving local Hermes CLI compatibility and smoke-test coverage |
 
 ## Templates
 
@@ -162,6 +161,8 @@ The primary interface for SkillOpt is conversational — your agent drives the p
 5. **The optimizer and target can be the same model.** The paper shows same-model optimization still produces strong gains. A more capable optimizer helps, but it's not required.
 
 6. **Validation is multi-objective.** Pass/fail is the primary hard gate, but it is not the only signal. Held-out tasks should also report `quality_score` for minute output quality. The runner measures speed and heuristic token use, then computes a weighted score. Do not accept a same-pass-rate edit that makes quality, speed, or token use materially worse.
+
+7. **Size reduction is a first-class objective only when measured.** If the user asks to make a skill shorter, leaner, or less context-heavy, run a size-objective SkillOpt pass rather than judging the edit by readability. Measure baseline lines, words, characters, and token estimate; increase `token_efficiency` weight while keeping pass rate dominant; prefer moving bulky templates or rare setup detail into `references/` over deleting behavioral invariants. See `references/size-objective-compaction.md`.
 
 ## Pitfalls
 
@@ -190,17 +191,12 @@ The rule: **when a proposed edit adds or changes command-line examples, test eve
 
 This is a special case of the surface-plausibility trap: command syntax that reads correctly in text may not execute correctly, and the validation gate doesn't automatically test prose examples for syntactic accuracy against the live CLI.
 
-- **Large skill documents must be passed by path, not inlined into `-z`.** Linux enforces a per-argument `MAX_ARG_STRLEN` limit that is often around 128 KiB even when `ARG_MAX` is larger. A real test against the 160 KiB `pytorch-fsdp` skill failed before Hermes started because the full SKILL.md was embedded as one `hermes -z "$prompt"` argument. Phase runners should give Hermes a skill file path and tell the agent to read it; validation of edited in-memory copies should write a temporary skill file and pass that path. Do not hide this failure with generic `execution error` records.
+- **Large skill documents must be passed by path, not inlined into `-z`.** Linux enforces a per-argument `MAX_ARG_STRLEN` limit that is often around 128 KiB even when `ARG_MAX` is larger. A real test against the 160 KiB `pytorch-fsdp` skill failed before Hermes started because the full SKILL.md was embedded as one `hermes -z "$prompt"` argument. Phase runners should give Hermes a skill file path and tell the agent to read it; validation of edited in-memory copies should write a temporary skill file and pass that path. Do not hide this failure with generic `execution error` records: distinguish `shell_argument_limit`, `shell_exec_failure`, `hermes_runtime_failure`, `tool_bug`, `artifact_schema_failure`, and `skill_document_defect` so reflection can tell runner failures from skill-quality failures.
 
-## Attribution
+- **Size compaction candidates are not accepted until executed.** Moving templates or setup sections into `references/` can look obviously safe, but SkillOpt still requires held-out execution validation. If child Hermes validation calls are blocked by an approval gate, stop and report the compacted candidates as unvalidated proposals rather than retrying, routing around the denial, or applying the compacted live skill by surface plausibility.
 
-This skill implements the methodology described in:
+- **Separate target-skill failures from SkillOpt infrastructure failures.** A run can reveal runner bugs, Hermes CLI drift, validation blind spots, artifact contamination, or weak smoke tests. Classify and fix those as SkillOpt-system defects before treating the evidence as a target-skill quality problem.
 
-- **SkillOpt:** Yifan Yang et al., "Controllable Text-Space Optimization for Agent Skills" (arXiv 2605.23904, 2025)
-- **SkillLens:** Microsoft Research, "A Systematic Study of Model-Generated Agent Skills" (arXiv 2605.23899, 2025)
+- **Support-file validation is workspace-aware, but target edits are still single-file.** The runner builds a temporary candidate workspace from an explicit allowlist of sibling support surfaces (`README.md`, `AGENTS.md`, `LICENSE`, `references/`, `scripts/`, `templates/`, `assets/`), overlays the proposed `SKILL.md`, and tells validators to inspect only that workspace when relevant. Symlinks and undeclared files are skipped so validation cannot leak arbitrary target-directory contents. This proves existing allowed support files remain loadable with the candidate skill. It does **not** create or edit new support files: candidates that move content into new `references/` or scripts still require a sandbox/custom validation step that stages those files and verifies direct loads before live application.
 
-The kanban execution substrate is provided by Hermes Agent. The methodology is model-agnostic and framework-agnostic — the kanban implementation is Hermes-native but the phase design applies to any agent skill optimization workflow.
-
-## License
-
-MIT — see LICENSE file.
+- **Baselines should track the post-merge skill.** After successful post-merge cumulative validation, the runner refreshes `validation-results/baseline.json` with the merged skill's metrics so future epochs compare against the current candidate, not stale pre-merge scores. If a run was produced by an older runner or a manual merge, confirm metadata and baseline artifacts reflect the new candidate before the next epoch.

@@ -18,6 +18,8 @@ SkillOpt is a methodology skill that any Hermes Agent can load to run controlled
 - `references/methodology-guide.md` — Deep research rationale
 - `references/test-suite-design.md` — Task selection guidance
 - `references/artifact-formats.md` — JSON schemas for all phase outputs
+- `references/size-objective-compaction.md` — Size/token-footprint optimization guidance
+- `references/upstream-reconciliation.md` — Maintainer guidance for reconciling upstream changes, local Hermes CLI compatibility fixes, and SkillOpt-system defects
 
 ## How to Use This Skill in a Conversation
 
@@ -25,11 +27,20 @@ When a user says they want to optimize a skill:
 
 1. Load this skill with `skill_view(name='skillopt')` to access the methodology
 2. Guide the user through defining 3-5 training and 3-5 validation tasks
-3. Call `hermes kanban boards create` with the proper slug and description
-4. Create rollout tasks with `hermes kanban create "Rollout: ..." --body "..." --priority 3`
+3. Call `hermes kanban boards create` with the proper lowercase `skillopt-<skill-slug>` slug and description
+4. Create rollout tasks with `hermes kanban --board <slug> create "Rollout: ..." --body "..." --priority 3`
 5. Run each phase: rollouts via `hermes -z`/`--oneshot`, reflections by reviewing artifacts, proposals by analyzing failure patterns, validation by comparing before/after pass rate, quality score, speed, and token-efficiency metrics. For large skills, pass skill paths in prompts instead of inlining full SKILL.md content to avoid Linux per-argument limits.
 6. Apply accepted edits to the target skill file
 7. Report results conversationally
+
+## Meta-learning from SkillOpt Runs
+
+A SkillOpt run can produce two different learning streams:
+
+- **Target-skill learning:** accepted/rejected edits to the skill being optimized.
+- **SkillOpt-system learning:** runner bugs, Hermes CLI drift, validation blind spots, artifact contamination, weak smoke tests, or documentation-boundary problems in this repo.
+
+Keep these separate. Do not treat SkillOpt infrastructure failures as target-skill defects. For upstream/local reconciliation and CLI-compatibility decisions, use `references/upstream-reconciliation.md`.
 
 ## File Conventions
 
@@ -44,7 +55,7 @@ When a user says they want to optimize a skill:
 1. File an issue describing the change
 2. Branch from main
 3. Make changes (SKILL.md, scripts, references)
-4. Run tests: `bash -n scripts/*.sh`
+4. Run tests: `bash -n scripts/*.sh`, parse `templates/*.json`, verify documented Hermes CLI subcommands against `hermes --help`, and run a temp-state stub-Hermes smoke test for rollout → reflect → propose → validate → merge
 5. Open a PR
 6. Wait for review
 7. Merge

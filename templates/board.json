@@ -7,6 +7,7 @@
     "properties": {
         "target": {"type": "string", "description": "Absolute path to the target SKILL.md"},
         "skill_name": {"type": "string", "description": "Name of the skill being optimized"},
+        "skill_slug": {"type": "string", "pattern": "^[a-z0-9-]+$", "description": "Lowercase kebab slug used for board slugs and state directory names"},
         "board_slug": {"type": "string", "pattern": "^skillopt-[a-z0-9-]+$", "description": "Kanban board slug"},
         "training_count": {"type": "integer", "minimum": 1},
         "validation_count": {"type": "integer", "minimum": 1},

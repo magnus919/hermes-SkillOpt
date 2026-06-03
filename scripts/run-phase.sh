@@ -45,7 +45,29 @@ show_usage() {
 
 run_hermes_prompt() {
     # Current Hermes exposes -z/--oneshot for single-prompt noninteractive runs.
-    "$HERMES" -z "$1"
+    # Use shlex splitting so HERMES may be either a bare executable path or a
+    # command with fixed args, e.g. HERMES='hermes --provider openai-codex -m gpt-5.5'.
+    local prompt_file
+    prompt_file=$(mktemp)
+    printf '%s' "$1" > "$prompt_file"
+
+    local status
+    set +e
+    HERMES_CMD="$HERMES" PROMPT_FILE="$prompt_file" python3 << 'PYEOF'
+import os, shlex, subprocess, sys
+
+hermes_cmd = os.environ.get("HERMES_CMD", "hermes")
+prompt_file = os.environ["PROMPT_FILE"]
+with open(prompt_file, encoding="utf-8") as f:
+    prompt = f.read()
+cmd = shlex.split(hermes_cmd) + ["-z", prompt]
+completed = subprocess.run(cmd, text=True)
+sys.exit(completed.returncode)
+PYEOF
+    status=$?
+    set -e
+    rm -f "$prompt_file"
+    return "$status"
 }
 
 decode_task_field() {
@@ -451,7 +473,7 @@ run_validate() {
         VAL_DIR="$validation_dir" \
         HERMES="$HERMES" \
         python3 << 'PYEOF'
-import json, os, shlex, subprocess, sys, tempfile, time
+import json, os, shlex, shutil, subprocess, sys, tempfile, time
 from datetime import datetime, timezone
 
 DEFAULT_METRIC_WEIGHTS = {
@@ -469,6 +491,7 @@ REQUIRED_METRIC_FIELDS = {
     "token_efficiency",
     "weighted_score",
 }
+VALIDATION_CONTEXT = "skill_workspace_v1"
 
 epoch = os.environ["EPOCH"]
 target = os.environ["TARGET_PATH"]
@@ -597,29 +620,86 @@ def normalize_verdict(verdict, prompt, skill_text, stdout="", stderr="", duratio
         "token_source": token_source,
     }
 
+SUPPORT_FILE_ALLOWLIST = {"README.md", "AGENTS.md", "LICENSE"}
+SUPPORT_DIR_ALLOWLIST = {"references", "scripts", "templates", "assets"}
+
+
+def skill_workspace_ignore(dirpath, names):
+    ignored = {
+        ".git",
+        ".hg",
+        ".svn",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        "__pycache__",
+        "node_modules",
+        ".venv",
+        "venv",
+        "dist",
+        "build",
+    }
+    skipped = {name for name in names if name in ignored or name.endswith(".pyc")}
+    for name in names:
+        if os.path.islink(os.path.join(dirpath, name)):
+            skipped.add(name)
+    return skipped
+
+
+def copy_allowed_support_files(source_dir, candidate_dir):
+    """Copy only declared support surfaces; never follow symlinks."""
+    os.makedirs(candidate_dir, exist_ok=True)
+    for name in sorted(SUPPORT_FILE_ALLOWLIST):
+        src = os.path.join(source_dir, name)
+        dst = os.path.join(candidate_dir, name)
+        if os.path.isfile(src) and not os.path.islink(src):
+            shutil.copy2(src, dst)
+    for name in sorted(SUPPORT_DIR_ALLOWLIST):
+        src = os.path.join(source_dir, name)
+        dst = os.path.join(candidate_dir, name)
+        if os.path.isdir(src) and not os.path.islink(src):
+            shutil.copytree(src, dst, ignore=skill_workspace_ignore)
+
+
+def create_candidate_workspace(skill_text, prefix):
+    """Create a safe support-file workspace and overlay candidate SKILL.md text."""
+    source_dir = os.path.dirname(os.path.abspath(target))
+    workspace = tempfile.TemporaryDirectory(prefix=prefix)
+    skill_dir_name = os.path.basename(source_dir.rstrip(os.sep)) or "skill"
+    candidate_dir = os.path.join(workspace.name, skill_dir_name)
+    copy_allowed_support_files(source_dir, candidate_dir)
+    skill_filename = os.path.basename(os.path.abspath(target)) or "SKILL.md"
+    skill_path = os.path.join(candidate_dir, skill_filename)
+    with open(skill_path, "w", encoding="utf-8") as f:
+        f.write(skill_text)
+    return workspace, candidate_dir, skill_path
+
+
 def run_validation_task(skill_text, task):
     task_inst = task.get("instruction", "")
-    skill_tmp = None
+    workspace = None
     prompt = ""
     started = time.monotonic()
     try:
-        with tempfile.NamedTemporaryFile(
-            "w", encoding="utf-8", suffix=".md", prefix="skillopt-validation-", delete=False
-        ) as f:
-            f.write(skill_text)
-            skill_tmp = f.name
+        workspace, skill_dir, skill_path = create_candidate_workspace(
+            skill_text,
+            prefix="skillopt-validation-workspace-",
+        )
 
-        prompt = f"""Evaluate this skill document against the following task.
+        prompt = f"""Evaluate this candidate skill workspace against the following task.
 
-=== SKILL DOCUMENT PATH ===
-{skill_tmp}
+=== CANDIDATE SKILL WORKSPACE ===
+{skill_dir}
 
-Read the skill document from this path before evaluating. Do not modify the skill file.
+=== CANDIDATE SKILL DOCUMENT PATH ===
+{skill_path}
+
+Read the skill document first. If the task depends on linked or sibling support files, inspect files inside the candidate workspace only, including README.md, AGENTS.md, references/, scripts/, templates/, and assets/ when present. Do not inspect or modify the original installed skill outside this workspace. Do not modify files.
 
 === TASK ===
 {task_inst}
 
-Does this skill successfully handle this task? Respond with ONLY a JSON object:
+Does this candidate skill successfully handle this task? Respond with ONLY a JSON object:
 {{
   "pass": true/false,
   "quality_score": 0.0-1.0,
@@ -646,11 +726,8 @@ Scoring guidance:
             duration_seconds=duration,
         )
     finally:
-        if skill_tmp:
-            try:
-                os.unlink(skill_tmp)
-            except OSError:
-                pass
+        if workspace:
+            workspace.cleanup()
 
     if result.returncode != 0:
         return normalize_verdict(
@@ -769,7 +846,9 @@ def load_or_create_baseline(skill_content, val_tasks):
     if os.path.exists(baseline_file):
         baseline = load_json(baseline_file)
         metrics = baseline.get("baseline_metrics") or baseline.get("metrics")
-        if baseline_has_required_metrics(metrics):
+        if baseline.get("validation_context") != VALIDATION_CONTEXT:
+            print("  Existing baseline uses old validation context; recomputing baseline.")
+        elif baseline_has_required_metrics(metrics):
             print(
                 f"  Baseline loaded: {baseline_file} "
                 f"(pass: {float(metrics.get('pass_rate', 0.0)):.0%}, "
@@ -777,7 +856,8 @@ def load_or_create_baseline(skill_content, val_tasks):
                 f"score: {float(metrics.get('weighted_score', 0.0)):.2f})"
             )
             return baseline, metrics
-        print("  Existing baseline lacks multi-objective metrics; recomputing baseline.")
+        else:
+            print("  Existing baseline lacks multi-objective metrics; recomputing baseline.")
 
     details = []
     for task in val_tasks:
@@ -787,8 +867,9 @@ def load_or_create_baseline(skill_content, val_tasks):
 
     metrics = metrics_from_details(details, metric_weights)
     baseline = {
-        "epoch": epoch,
+        "epoch": int(epoch),
         "target": target,
+        "validation_context": VALIDATION_CONTEXT,
         "validation_tasks_run": len(val_tasks),
         "metric_weights": metric_weights,
         "baseline_metrics": metrics,
@@ -1006,7 +1087,7 @@ run_merge() {
         TEST_SUITE="$TEST_SUITE" \
         HERMES="$HERMES" \
         python3 << 'PYEOF'
-import glob, json, os, shlex, subprocess, tempfile, time
+import glob, json, os, shlex, shutil, subprocess, tempfile, time
 from datetime import datetime, timezone
 
 epoch = os.environ["EPOCH"]
@@ -1016,6 +1097,13 @@ snapshots_dir = os.environ["SNAPSHOTS_DIR"]
 state_dir = os.environ["STATE_DIR"]
 test_suite_path = os.environ.get("TEST_SUITE", "")
 hermes = os.environ.get("HERMES", "hermes")
+VALIDATION_CONTEXT = "skill_workspace_v1"
+DEFAULT_METRIC_WEIGHTS = {
+    "pass_rate": 0.55,
+    "quality_score": 0.30,
+    "speed_score": 0.10,
+    "token_efficiency": 0.05,
+}
 
 for name, value in {
     "TARGET_PATH": target,
@@ -1073,21 +1161,81 @@ def apply_edit(skill, proposal):
 
 # ── Post-merge cumulative validation helpers ──────────────────────
 
+SUPPORT_FILE_ALLOWLIST = {"README.md", "AGENTS.md", "LICENSE"}
+SUPPORT_DIR_ALLOWLIST = {"references", "scripts", "templates", "assets"}
+
+
+def skill_workspace_ignore(dirpath, names):
+    ignored = {
+        ".git",
+        ".hg",
+        ".svn",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        "__pycache__",
+        "node_modules",
+        ".venv",
+        "venv",
+        "dist",
+        "build",
+    }
+    skipped = {name for name in names if name in ignored or name.endswith(".pyc")}
+    for name in names:
+        if os.path.islink(os.path.join(dirpath, name)):
+            skipped.add(name)
+    return skipped
+
+
+def copy_allowed_support_files(source_dir, candidate_dir):
+    """Copy only declared support surfaces; never follow symlinks."""
+    os.makedirs(candidate_dir, exist_ok=True)
+    for name in sorted(SUPPORT_FILE_ALLOWLIST):
+        src = os.path.join(source_dir, name)
+        dst = os.path.join(candidate_dir, name)
+        if os.path.isfile(src) and not os.path.islink(src):
+            shutil.copy2(src, dst)
+    for name in sorted(SUPPORT_DIR_ALLOWLIST):
+        src = os.path.join(source_dir, name)
+        dst = os.path.join(candidate_dir, name)
+        if os.path.isdir(src) and not os.path.islink(src):
+            shutil.copytree(src, dst, ignore=skill_workspace_ignore)
+
+
+def create_candidate_workspace(skill_text, prefix):
+    """Create a safe support-file workspace and overlay candidate SKILL.md text."""
+    source_dir = os.path.dirname(os.path.abspath(target))
+    workspace = tempfile.TemporaryDirectory(prefix=prefix)
+    skill_dir_name = os.path.basename(source_dir.rstrip(os.sep)) or "skill"
+    candidate_dir = os.path.join(workspace.name, skill_dir_name)
+    copy_allowed_support_files(source_dir, candidate_dir)
+    skill_filename = os.path.basename(os.path.abspath(target)) or "SKILL.md"
+    skill_path = os.path.join(candidate_dir, skill_filename)
+    with open(skill_path, "w", encoding="utf-8") as f:
+        f.write(skill_text)
+    return workspace, candidate_dir, skill_path
+
+
 def run_post_merge_task(merged_skill, task):
-    """Run a single validation task against the merged skill via hermes -z."""
+    """Run a single validation task against a support-file-aware merged skill workspace."""
     task_inst = task.get("instruction", "")
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".md",
-                                      prefix="skillopt-postmerge-", delete=False) as f:
-        f.write(merged_skill)
-        skill_tmp = f.name
+    workspace = None
+    prompt = ""
+    started = time.monotonic()
     try:
-        started = time.monotonic()
-        prompt = f"""Evaluate this skill document against the following task.
+        workspace, skill_dir, skill_path = create_candidate_workspace(
+            merged_skill,
+            prefix="skillopt-postmerge-workspace-",
+        )
+        prompt = f"""Evaluate this merged skill workspace against the following task.
+
+=== SKILL WORKSPACE ===
+{skill_dir}
 
 === SKILL DOCUMENT PATH ===
-{skill_tmp}
+{skill_path}
 
-Read the skill document from this path before evaluating. Do not modify the skill file.
+Read the skill document first. If the task depends on linked or sibling support files, inspect files inside this workspace only, including README.md, AGENTS.md, references/, scripts/, templates/, and assets/ when present. Do not inspect or modify the original installed skill outside this workspace. Do not modify files.
 
 === TASK ===
 {task_inst}
@@ -1099,11 +1247,13 @@ Does this skill successfully handle this task? Respond with ONLY a JSON object:
         duration = time.monotonic() - started
         if result.returncode != 0:
             return {"pass": False, "quality_score": 0.0, "duration_seconds": duration,
+                    "token_estimate": int((len(prompt) + len(merged_skill) + len(result.stdout or "") + len(result.stderr or "") + 3) // 4),
                     "reason": f"hermes -z failed with exit {result.returncode}"}
         try:
             verdict = json.loads((result.stdout or "").strip())
         except json.JSONDecodeError:
             return {"pass": False, "quality_score": 0.0, "duration_seconds": duration,
+                    "token_estimate": int((len(prompt) + len(merged_skill) + len(result.stdout or "") + 3) // 4),
                     "reason": "parse error"}
         return {
             "pass": bool(verdict.get("pass", False)),
@@ -1114,28 +1264,59 @@ Does this skill successfully handle this task? Respond with ONLY a JSON object:
         }
     except Exception as exc:
         return {"pass": False, "quality_score": 0.0, "duration_seconds": time.monotonic() - started,
+                "token_estimate": int((len(prompt) + len(merged_skill) + 3) // 4),
                 "reason": f"execution error: {exc}"}
     finally:
-        try:
-            os.unlink(skill_tmp)
-        except OSError:
-            pass
+        if workspace:
+            workspace.cleanup()
 
 
-def post_merge_metrics_from_details(details):
-    """Compute pass_rate, quality_score, speed_score, token_efficiency from task results."""
-    if not details:
-        return {"pass_rate": 0.0, "quality_score": 0.0, "speed_score": 0.0, "token_efficiency": 0.0}
+def post_merge_metrics_from_details(details, weights):
+    """Compute the same baseline metric schema used by validate-phase baselines."""
+    total = len(details)
+    if not total:
+        return {
+            "pass_rate": 0.0,
+            "tasks_passed": 0,
+            "tasks_failed": 0,
+            "avg_quality_score": 0.0,
+            "avg_duration_seconds": 0.0,
+            "total_duration_seconds": 0.0,
+            "avg_token_estimate": 0,
+            "total_token_estimate": 0,
+            "speed_score": 0.0,
+            "token_efficiency": 0.0,
+            "weighted_score": 0.0,
+        }
     passed = sum(1 for d in details if d.get("pass", False))
-    pass_rate = passed / len(details)
-    avg_quality = sum(d.get("quality_score", 0.0) for d in details) / len(details)
-    avg_duration = sum(d.get("duration_seconds", 0.0) for d in details) / len(details)
-    avg_tokens = sum(d.get("token_estimate", 0) for d in details) / len(details)
+    pass_rate = passed / total
+    avg_quality = sum(float(d.get("quality_score", 0.0)) for d in details) / total
+    durations = [max(0.0, float(d.get("duration_seconds", 0.0))) for d in details]
+    tokens = [max(0, int(float(d.get("token_estimate", 0)))) for d in details]
+    total_duration = sum(durations)
+    avg_duration = total_duration / total
+    total_tokens = sum(tokens)
+    avg_tokens = total_tokens / total
+    speed_score = 1.0 / (1.0 + avg_duration)
+    token_efficiency = 1.0 / (1.0 + (avg_tokens / 1000.0))
+    weighted_score = (
+        weights.get("pass_rate", 0.0) * pass_rate
+        + weights.get("quality_score", 0.0) * avg_quality
+        + weights.get("speed_score", 0.0) * speed_score
+        + weights.get("token_efficiency", 0.0) * token_efficiency
+    )
     return {
-        "pass_rate": pass_rate,
-        "quality_score": avg_quality,
-        "speed_score": 1.0 / (1.0 + avg_duration),
-        "token_efficiency": 1.0 / (1.0 + (avg_tokens / 1000.0)),
+        "pass_rate": round(pass_rate, 4),
+        "tasks_passed": passed,
+        "tasks_failed": total - passed,
+        "avg_quality_score": round(avg_quality, 4),
+        "avg_duration_seconds": round(avg_duration, 3),
+        "total_duration_seconds": round(total_duration, 3),
+        "avg_token_estimate": int(round(avg_tokens)),
+        "total_token_estimate": int(total_tokens),
+        "speed_score": round(speed_score, 4),
+        "token_efficiency": round(token_efficiency, 4),
+        "weighted_score": round(weighted_score, 4),
     }
 
 
@@ -1203,9 +1384,7 @@ if test_suite_path and os.path.exists(test_suite_path):
             try:
                 baseline = load_json(baseline_file)
                 bm = baseline.get("baseline_metrics") or {}
-                weights = baseline.get("metric_weights",
-                    {"pass_rate": 0.55, "quality_score": 0.30,
-                     "speed_score": 0.10, "token_efficiency": 0.05})
+                weights = baseline.get("metric_weights", DEFAULT_METRIC_WEIGHTS)
                 bpr = float(bm.get("pass_rate", 0.0))
                 bsc = float(bm.get("weighted_score", bpr))
             except Exception:
@@ -1216,16 +1395,16 @@ if test_suite_path and os.path.exists(test_suite_path):
                     merged_skill = f.read()
 
                 details = []
+                detail_records = []
                 for task in val_tasks:
+                    task_id = task.get("id", "unknown")
                     verdict = run_post_merge_task(merged_skill, task)
                     details.append(verdict)
+                    detail_records.append({"task_id": task_id, "result": verdict})
 
-                pm = post_merge_metrics_from_details(details)
+                pm = post_merge_metrics_from_details(details, weights)
                 mpr = pm["pass_rate"]
-                msc = (weights["pass_rate"] * pm["pass_rate"]
-                       + weights["quality_score"] * pm["quality_score"]
-                       + weights["speed_score"] * pm["speed_score"]
-                       + weights["token_efficiency"] * pm["token_efficiency"])
+                msc = pm["weighted_score"]
 
                 if mpr < bpr or msc < bsc:
                     merge_reverted = True
@@ -1245,8 +1424,24 @@ if test_suite_path and os.path.exists(test_suite_path):
                     diag_buffer.append(diag)
                     write_json(diag_file, diag_buffer)
                 else:
+                    refreshed_baseline = {
+                        "epoch": int(epoch) + 1,
+                        "target": target,
+                        "validation_context": VALIDATION_CONTEXT,
+                        "validation_tasks_run": len(val_tasks),
+                        "metric_weights": weights,
+                        "baseline_metrics": pm,
+                        "validation_detail": detail_records,
+                        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "refreshed_from_epoch": int(epoch),
+                        "source": "post_merge_refresh",
+                    }
+                    write_json(baseline_file, refreshed_baseline)
                     print(f"  ✓ Post-merge validation passed: pass {bpr:.0%}→{mpr:.0%}, "
                           f"score {bsc:.2f}→{msc:.2f}")
+                    print(f"  Baseline refreshed: {baseline_file} "
+                          f"(pass: {mpr:.0%}, quality: {pm['avg_quality_score']:.2f}, "
+                          f"score: {msc:.2f})")
 
 meta_file = os.path.join(state_dir, "board-metadata.json")
 meta = load_json(meta_file)

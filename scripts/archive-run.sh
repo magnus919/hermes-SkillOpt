@@ -17,6 +17,12 @@ show_usage() {
     exit 1
 }
 
+slugify() {
+    # Keep archive cleanup aligned with seed-board.sh and Hermes' board slug
+    # normalization: lowercase kebab-case, no underscores or mixed case.
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
+}
+
 BOARD_SLUG=""
 KEEP_STATE=false
 
@@ -33,9 +39,18 @@ if [[ -z "$BOARD_SLUG" ]]; then
     show_usage
 fi
 
-SKILL_NAME="${BOARD_SLUG#skillopt-}"
-SKILL_NAME="${SKILL_NAME#SkillOpt-}"
-STATE_DIR="$SKILLOPT_DIR/$SKILL_NAME"
+RAW_SKILL_NAME="${BOARD_SLUG#skillopt-}"
+RAW_SKILL_NAME="${RAW_SKILL_NAME#SkillOpt-}"
+SKILL_SLUG="$(slugify "$RAW_SKILL_NAME")"
+BOARD_SLUG_CLI="skillopt-${SKILL_SLUG}"
+SKILL_NAME="$RAW_SKILL_NAME"
+STATE_DIR="$SKILLOPT_DIR/$SKILL_SLUG"
+
+# Backward-compatible read path for runs created by older local versions that
+# used the raw skill directory name instead of the slugified state directory.
+if [[ ! -f "$STATE_DIR/board-metadata.json" && -f "$SKILLOPT_DIR/$RAW_SKILL_NAME/board-metadata.json" ]]; then
+    STATE_DIR="$SKILLOPT_DIR/$RAW_SKILL_NAME"
+fi
 
 if [[ ! -f "$STATE_DIR/board-metadata.json" ]]; then
     echo "WARNING: No state directory found for '$SKILL_NAME'."
@@ -60,13 +75,16 @@ EOF
     echo "Run summary written to: $SUMMARY_FILE"
 fi
 
-# Archive the board
-if "$HERMES" kanban boards list 2>/dev/null | grep -qF "$BOARD_SLUG"; then
-    echo "Archiving board: $BOARD_SLUG"
-    "$HERMES" kanban boards archive "$BOARD_SLUG" 2>/dev/null || \
-        echo "  (board archived manually)"
+# Remove/archive the board unless explicitly preserved for review. Current
+# Hermes exposes this as `boards rm`; `boards archive` is not a valid boards
+# subcommand in the installed CLI.
+if [[ "$KEEP_STATE" == true ]]; then
+    echo "Board preserved for review (--keep-state was set): $BOARD_SLUG_CLI"
+elif "$HERMES" kanban boards list 2>/dev/null | grep -qF "$BOARD_SLUG_CLI"; then
+    echo "Removing board: $BOARD_SLUG_CLI"
+    "$HERMES" kanban boards rm "$BOARD_SLUG_CLI"
 else
-    echo "Board '$BOARD_SLUG' not found — may already be archived."
+    echo "Board '$BOARD_SLUG_CLI' not found — may already be archived."
 fi
 
 echo ""
@@ -76,5 +94,5 @@ echo ""
 if [[ "$KEEP_STATE" == true ]]; then
     echo "Board preserved for review (--keep-state was set)."
 else
-    echo "Board cleaned up. To restore: seed-board.sh --target $TARGET ... --budget ..."
+    echo "Board cleaned up. To restore: seed-board.sh --target ${TARGET:-<target-skill>} ... --budget ..."
 fi

@@ -71,7 +71,7 @@ BOARD_SLUG="skillopt-${SKILL_SLUG}"
 if "$HERMES" kanban boards list 2>/dev/null | grep -qF "$BOARD_SLUG"; then
     echo "ERROR: Board '$BOARD_SLUG' already exists for skill '$SKILL_NAME'."
     echo "Use a different board name or archive the existing one:"
-    echo "  hermes kanban archive ..."
+    echo "  hermes kanban boards rm $BOARD_SLUG"
     exit 1
 fi
 
@@ -250,7 +250,7 @@ Record: task description, execution trace, outcome (success/failure), and any ob
 Output: JSON following the rollout record schema in references/artifact-formats.md
 BODYEOF
 
-    "$HERMES" kanban create "Rollout: ${CURRENT_TASK}" \
+    "$HERMES" kanban --board "$BOARD_SLUG" create "Rollout: ${CURRENT_TASK}" \
         --body "$(cat "$body_file")" \
         --priority 3 \
         --created-by "skillopt"
@@ -258,7 +258,7 @@ BODYEOF
 done
 
 # Create validation baseline task
-"$HERMES" kanban create "Validation: establish baseline metrics" \
+"$HERMES" kanban --board "$BOARD_SLUG" create "Validation: establish baseline metrics" \
     --body "Run the $VALIDATION_COUNT validation tasks (defined in $TEST_SUITE_FILE) with the current skill at $TARGET. Record pass/fail, quality score, speed, token estimate, and weighted score as the baseline for future comparison.
 
 State: $SKILLOPT_DIR/$SKILL_SLUG/validation-results/baseline.json" \
