@@ -1590,6 +1590,7 @@ if os.path.exists(validation_index):
         accepted_ids = [e["edit_id"] for e in meta.get("accepted_edits", [])]
         dossier_dir = os.path.join(validation_pyramid, "03-dossiers")
         result_files = sorted(os.path.join(dossier_dir, f"{eid}.json") for eid in accepted_ids)
+        rejected = meta.get("rejected", 0)  # read from L1 frontmatter for accurate count
     except Exception:
         result_files = []
 if not result_files:
