@@ -499,7 +499,11 @@ proposal_file = os.environ["PROPOSAL_FILE"]
 test_suite = os.environ["TEST_SUITE"]
 val_dir = os.environ["VAL_DIR"]
 hermes = os.environ.get("HERMES", "hermes")
-baseline_file = os.path.join(val_dir, "baseline.json")
+baseline_dir = os.path.join(state_dir, "baseline", f"epoch-{epoch}")
+baseline_index = os.path.join(baseline_dir, "00-index.md")
+baseline_summary = os.path.join(baseline_dir, "01-summary", "findings.md")
+baseline_analysis = os.path.join(baseline_dir, "02-analysis", "per-task-evaluation.md")
+baseline_dossiers = os.path.join(baseline_dir, "03-dossiers")
 state_dir = os.path.dirname(val_dir)
 metadata_file = os.path.join(state_dir, "board-metadata.json")
 
@@ -843,30 +847,153 @@ def baseline_has_required_metrics(metrics):
     return isinstance(metrics, dict) and REQUIRED_METRIC_FIELDS.issubset(metrics.keys())
 
 def load_or_create_baseline(skill_content, val_tasks):
-    if os.path.exists(baseline_file):
-        baseline = load_json(baseline_file)
-        metrics = baseline.get("baseline_metrics") or baseline.get("metrics")
-        if baseline.get("validation_context") != VALIDATION_CONTEXT:
-            print("  Existing baseline uses old validation context; recomputing baseline.")
-        elif baseline_has_required_metrics(metrics):
-            print(
-                f"  Baseline loaded: {baseline_file} "
-                f"(pass: {float(metrics.get('pass_rate', 0.0)):.0%}, "
-                f"quality: {float(metrics.get('avg_quality_score', 0.0)):.2f}, "
-                f"score: {float(metrics.get('weighted_score', 0.0)):.2f})"
-            )
-            return baseline, metrics
-        else:
-            print("  Existing baseline lacks multi-objective metrics; recomputing baseline.")
+    if os.path.exists(baseline_index):
+        try:
+            summary_text = open(baseline_summary).read()
+            meta = json.loads(summary_text.split("---", 2)[1])
+            metrics = {k: meta[k] for k in ("pass_rate", "avg_quality_score", "avg_duration_seconds",
+                                             "avg_token_estimate", "speed_score", "token_efficiency",
+                                             "weighted_score", "tasks_passed", "tasks_failed",
+                                             "total_duration_seconds", "total_token_estimate")}
+            ctx = meta.get("validation_context")
+            if ctx != VALIDATION_CONTEXT:
+                print("  Existing baseline uses old validation context; recomputing baseline.")
+            elif not baseline_has_required_metrics(metrics):
+                print("  Existing baseline lacks multi-objective metrics; recomputing baseline.")
+            else:
+                # Load per-task details from L3 dossiers
+                details = []
+                if os.path.isdir(baseline_dossiers):
+                    for fname in sorted(os.listdir(baseline_dossiers)):
+                        if fname.endswith(".json"):
+                            fpath = os.path.join(baseline_dossiers, fname)
+                            details.append(load_json(fpath))
+                baseline = {
+                    "epoch": int(epoch),
+                    "target": target,
+                    "validation_context": ctx,
+                    "validation_tasks_run": meta.get("total_tasks", 0),
+                    "metric_weights": meta.get("metric_weights", {}),
+                    "baseline_metrics": metrics,
+                    "validation_detail": details,
+                    "created_at": meta.get("created_at", ""),
+                }
+                print(
+                    f"  Baseline loaded: {baseline_index} "
+                    f"(pass: {float(meta.get('pass_rate', 0.0)):.0%}, "
+                    f"quality: {float(meta.get('avg_quality_score', 0.0)):.2f}, "
+                    f"score: {float(meta.get('weighted_score', 0.0)):.2f})"
+                )
+                return baseline, metrics
+        except Exception as exc:
+            print(f"  Baseline cache corrupted ({exc}); recomputing baseline.")
 
+    # --- Cache miss / recompute: run baseline ---
     details = []
+    raw_outputs = []
     for task in val_tasks:
         task_id = task.get("id", "unknown")
         verdict = run_validation_task(skill_content, task)
-        details.append({"task_id": task_id, "result": verdict})
+        detail = {"task_id": task_id, "result": verdict}
+        details.append(detail)
+        raw_outputs.append({"task_id": task_id, "stdout": verdict.get("stdout", ""),
+                            "stderr": verdict.get("stderr", ""), "verdict": verdict})
 
     metrics = metrics_from_details(details, metric_weights)
-    baseline = {
+
+    # Write artifact pyramid
+    os.makedirs(os.path.join(baseline_dir, "01-summary"), exist_ok=True)
+    os.makedirs(os.path.join(baseline_dir, "02-analysis"), exist_ok=True)
+    os.makedirs(baseline_dossiers, exist_ok=True)
+
+    created_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # L1: Summary with YAML frontmatter (machine-parseable) + human-readable
+    summary = f"""---
+epoch: {int(epoch)}
+pass_rate: {metrics['pass_rate']}
+tasks_passed: {metrics['tasks_passed']}
+tasks_failed: {metrics['tasks_failed']}
+total_tasks: {len(val_tasks)}
+avg_quality_score: {metrics['avg_quality_score']}
+avg_duration_seconds: {metrics['avg_duration_seconds']}
+total_duration_seconds: {metrics['total_duration_seconds']}
+avg_token_estimate: {metrics['avg_token_estimate']}
+total_token_estimate: {metrics['total_token_estimate']}
+speed_score: {metrics['speed_score']}
+token_efficiency: {metrics['token_efficiency']}
+weighted_score: {metrics['weighted_score']}
+validation_context: {VALIDATION_CONTEXT}
+metric_weights: {json.dumps(metric_weights)}
+target: {target}
+created_at: {created_at}
+---
+
+# Baseline Validation — Epoch {epoch}
+
+**Baseline pass rate:** {metrics['tasks_passed']}/{len(val_tasks)} ({float(metrics['pass_rate']):.0%})
+**Weighted score:** {float(metrics['weighted_score']):.4f}
+**Avg quality:** {float(metrics['avg_quality_score']):.4f}
+
+The unedited skill was evaluated against {len(val_tasks)} validation tasks.
+
+## SOURCES (LAYER 2 NAVIGATION)
+{baseline_analysis}
+ -> Per-task baseline results with pass/fail and quality breakdown
+"""
+    with open(baseline_summary, "w", encoding="utf-8") as f:
+        f.write(summary)
+
+    # L2: Per-task analysis
+    analysis_lines = [f"# Per-Task Baseline Evaluation — Epoch {epoch}\n"]
+    analysis_lines.append(f"\nBaseline ran {len(val_tasks)} tasks. "
+                          f"{metrics['tasks_passed']} passed, {metrics['tasks_failed']} failed.\n")
+    for task in val_tasks:
+        tid = task.get("id", "unknown")
+        v = next((d["result"] for d in details if d["task_id"] == tid), {"pass": False, "quality_score": 0.0, "reason": "unknown"})
+        status = "PASS" if as_bool(v.get("pass", False)) else "FAIL"
+        reason = v.get("reason", "")
+        qs = v.get("quality_score", 0.0)
+        analysis_lines.append(f"## Task: {tid}")
+        analysis_lines.append(f"**Status:** {status} | **Quality:** {qs}")
+        analysis_lines.append(f"**Reason:** {reason}\n")
+    analysis_lines.append(f"\n## SOURCES (LAYER 3 NAVIGATION)\n")
+    for task in val_tasks:
+        tid = task.get("id", "unknown")
+        analysis_lines.append(f"{os.path.join(baseline_dossiers, f'task-{tid}.json')}")
+        analysis_lines.append(f" -> Raw validation output for task {tid}\n")
+    with open(baseline_analysis, "w", encoding="utf-8") as f:
+        f.write("\n".join(analysis_lines))
+
+    # L3: Raw output dossiers
+    for raw in raw_outputs:
+        dossier_path = os.path.join(baseline_dossiers, f"task-{raw['task_id']}.json")
+        write_json(dossier_path, raw)
+
+    # 00-index.md: navigation + provenance only
+    index_content = f"""# Baseline Validation Cache — Epoch {epoch}
+
+Artifact-pyramid cache of the unedited skill's performance against validation tasks for epoch {epoch}.
+
+## Navigation
+
+- [01-summary/findings.md](01-summary/findings.md) — L1: baseline pass rate, weighted score, quality
+- [02-analysis/per-task-evaluation.md](02-analysis/per-task-evaluation.md) — L2: per-task pass/fail breakdown with reasoning
+- [03-dossiers/](03-dossiers/) — L3: raw validation output per task
+
+## Provenance
+
+- **epoch:** {epoch}
+- **target:** {target}
+- **generated_by:** SkillOpt validate phase (run-phase.sh)
+- **generated_at:** {created_at}
+- **validation_context:** {VALIDATION_CONTEXT}
+"""
+    with open(baseline_index, "w", encoding="utf-8") as f:
+        f.write(index_content)
+
+    # Also write a JSON snapshot for tools that need machine-parseable full state
+    baseline_json = {
         "epoch": int(epoch),
         "target": target,
         "validation_context": VALIDATION_CONTEXT,
@@ -874,16 +1001,17 @@ def load_or_create_baseline(skill_content, val_tasks):
         "metric_weights": metric_weights,
         "baseline_metrics": metrics,
         "validation_detail": details,
-        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        "created_at": created_at,
     }
-    write_json(baseline_file, baseline)
+    write_json(os.path.join(baseline_dir, "baseline.json"), baseline_json)
+
     print(
-        f"  Baseline written: {baseline_file} "
+        f"  Baseline written: {baseline_index} "
         f"(pass: {float(metrics.get('pass_rate', 0.0)):.0%}, "
         f"quality: {float(metrics.get('avg_quality_score', 0.0)):.2f}, "
         f"score: {float(metrics.get('weighted_score', 0.0)):.2f})"
     )
-    return baseline, metrics
+    return baseline_json, metrics
 
 def apply_edit(skill_content, edit):
     edit_type = edit.get("type", "replace")
@@ -1379,10 +1507,37 @@ if test_suite_path and os.path.exists(test_suite_path):
     except Exception:
         val_tasks = []
     if val_tasks:
-        baseline_file = os.path.join(val_dir, "baseline.json")
-        if os.path.exists(baseline_file):
+        # Derive artifact-pyramid baseline paths (same layout as validate phase)
+        _baseline_dir = os.path.join(os.path.dirname(val_dir), "baseline", f"epoch-{epoch}")
+        _baseline_index = os.path.join(_baseline_dir, "00-index.md")
+        _baseline_summary = os.path.join(_baseline_dir, "01-summary", "findings.md")
+        _baseline_dossiers = os.path.join(_baseline_dir, "03-dossiers")
+        _baseline_json = os.path.join(_baseline_dir, "baseline.json")
+        if os.path.exists(_baseline_index) or os.path.exists(_baseline_json):
             try:
-                baseline = load_json(baseline_file)
+                _source = _baseline_json if os.path.exists(_baseline_json) else _baseline_index
+                if _source == _baseline_json:
+                    baseline = load_json(_baseline_json)
+                else:
+                    summary_text = open(_baseline_summary).read()
+                    meta = json.loads(summary_text.split("---", 2)[1])
+                    # Load per-task details from L3 dossiers
+                    details = []
+                    if os.path.isdir(_baseline_dossiers):
+                        for fname in sorted(os.listdir(_baseline_dossiers)):
+                            if fname.endswith(".json"):
+                                details.append(load_json(os.path.join(_baseline_dossiers, fname)))
+                    baseline = {
+                        "epoch": int(epoch),
+                        "target": target,
+                        "validation_context": meta.get("validation_context", ""),
+                        "validation_tasks_run": meta.get("total_tasks", 0),
+                        "metric_weights": meta.get("metric_weights", {}),
+                        "baseline_metrics": {k: meta[k] for k in ("pass_rate", "avg_quality_score",
+                                             "weighted_score", "tasks_passed", "tasks_failed")},
+                        "validation_detail": details,
+                        "created_at": meta.get("created_at", ""),
+                    }
                 bm = baseline.get("baseline_metrics") or {}
                 weights = baseline.get("metric_weights", DEFAULT_METRIC_WEIGHTS)
                 bpr = float(bm.get("pass_rate", 0.0))
@@ -1424,8 +1579,9 @@ if test_suite_path and os.path.exists(test_suite_path):
                     diag_buffer.append(diag)
                     write_json(diag_file, diag_buffer)
                 else:
-                    refreshed_baseline = {
-                        "epoch": int(epoch) + 1,
+                    next_epoch = int(epoch) + 1
+                    refreshed_baseline_json = {
+                        "epoch": next_epoch,
                         "target": target,
                         "validation_context": VALIDATION_CONTEXT,
                         "validation_tasks_run": len(val_tasks),
@@ -1436,10 +1592,89 @@ if test_suite_path and os.path.exists(test_suite_path):
                         "refreshed_from_epoch": int(epoch),
                         "source": "post_merge_refresh",
                     }
-                    write_json(baseline_file, refreshed_baseline)
+                    # Write refreshed baseline as artifact pyramid
+                    _next_baseline_dir = os.path.join(os.path.dirname(val_dir), "baseline", f"epoch-{next_epoch}")
+                    os.makedirs(os.path.join(_next_baseline_dir, "01-summary"), exist_ok=True)
+                    os.makedirs(os.path.join(_next_baseline_dir, "02-analysis"), exist_ok=True)
+                    os.makedirs(os.path.join(_next_baseline_dir, "03-dossiers"), exist_ok=True)
+                    _new_summary = os.path.join(_next_baseline_dir, "01-summary", "findings.md")
+                    _new_analysis = os.path.join(_next_baseline_dir, "02-analysis", "per-task-evaluation.md")
+                    _new_dossiers = os.path.join(_next_baseline_dir, "03-dossiers")
+                    _new_index = os.path.join(_next_baseline_dir, "00-index.md")
+                    _created = refreshed_baseline_json["created_at"]
+                    with open(_new_summary, "w", encoding="utf-8") as f:
+                        f.write(f"""---
+epoch: {next_epoch}
+pass_rate: {pm['pass_rate']}
+tasks_passed: {pm['tasks_passed']}
+tasks_failed: {pm['tasks_failed']}
+total_tasks: {len(val_tasks)}
+avg_quality_score: {pm['avg_quality_score']}
+avg_duration_seconds: {pm['avg_duration_seconds']}
+total_duration_seconds: {pm['total_duration_seconds']}
+avg_token_estimate: {pm['avg_token_estimate']}
+total_token_estimate: {pm['total_token_estimate']}
+speed_score: {pm['speed_score']}
+token_efficiency: {pm['token_efficiency']}
+weighted_score: {pm['weighted_score']}
+validation_context: {VALIDATION_CONTEXT}
+metric_weights: {json.dumps(weights)}
+target: {target}
+created_at: {_created}
+source: post_merge_refresh
+---
+
+# Baseline Validation — Epoch {next_epoch} (Post-Merge Refresh)
+
+**Baseline pass rate:** {pm['tasks_passed']}/{len(val_tasks)} ({float(pm['pass_rate']):.0%})
+**Weighted score:** {float(pm['weighted_score']):.4f}
+
+Post-merge cumulative validation passed. Baseline refreshed.
+
+## SOURCES (LAYER 2 NAVIGATION)
+{_new_analysis}
+ -> Per-task post-merge validation results
+""")
+                    with open(_new_analysis, "w", encoding="utf-8") as f:
+                        lines = [f"# Per-Task Post-Merge Validation — Epoch {next_epoch}\n"]
+                        for d in detail_records:
+                            tid = d.get("task_id", "unknown")
+                            r = d.get("result", {})
+                            st = "PASS" if r.get("pass", False) else "FAIL"
+                            lines.append(f"## Task: {tid}")
+                            lines.append(f"**Status:** {st} | **Quality:** {r.get('quality_score', 0.0)}")
+                            lines.append(f"**Reason:** {r.get('reason', '')}\n")
+                        for d in detail_records:
+                            tid = d.get("task_id", "unknown")
+                            lines.append(f"{os.path.join(_new_dossiers, f'task-{tid}.json')}")
+                            lines.append(f" -> Raw output for task {tid}\n")
+                        f.write("\n".join(lines))
+                    for d in detail_records:
+                        d_path = os.path.join(_new_dossiers, f"task-{d['task_id']}.json")
+                        write_json(d_path, d)
+                    with open(_new_index, "w", encoding="utf-8") as f:
+                        f.write(f"""# Baseline Validation Cache — Epoch {next_epoch} (Post-Merge Refresh)
+
+Refreshed baseline after epoch {epoch} merge.
+
+## Navigation
+
+- [01-summary/findings.md](01-summary/findings.md) — L1: post-merge baseline metrics
+- [02-analysis/per-task-evaluation.md](02-analysis/per-task-evaluation.md) — L2: per-task validation results
+- [03-dossiers/](03-dossiers/) — L3: raw validation output per task
+
+## Provenance
+
+- **epoch:** {next_epoch}
+- **refreshed_from_epoch:** {epoch}
+- **source:** post_merge_refresh
+- **generated_at:** {_created}
+""")
+                    # Also write JSON snapshot for tool compatibility
+                    write_json(os.path.join(_next_baseline_dir, "baseline.json"), refreshed_baseline_json)
                     print(f"  ✓ Post-merge validation passed: pass {bpr:.0%}→{mpr:.0%}, "
                           f"score {bsc:.2f}→{msc:.2f}")
-                    print(f"  Baseline refreshed: {baseline_file} "
+                    print(f"  Baseline refreshed: {_new_index} "
                           f"(pass: {mpr:.0%}, quality: {pm['avg_quality_score']:.2f}, "
                           f"score: {msc:.2f})")
 
