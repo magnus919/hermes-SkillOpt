@@ -1172,6 +1172,121 @@ if rejected > 0:
         new_rejections.append(result)
     write_json(buffer_file, buffer)
     print(f"  Rejected edits appended to: {buffer_file} ({len(new_rejections)} new)")
+
+# --- Write epoch-level validation artifact pyramid ---
+validation_base = os.path.join(os.path.dirname(val_dir), "validation", f"epoch-{epoch}")
+os.makedirs(os.path.join(validation_base, "01-summary"), exist_ok=True)
+os.makedirs(os.path.join(validation_base, "02-analysis"), exist_ok=True)
+os.makedirs(os.path.join(validation_base, "03-dossiers"), exist_ok=True)
+
+# Compute aggregate metrics
+total_edits = len(results)
+accept_rate = round(accepted / total_edits, 4) if total_edits > 0 else 0.0
+avg_pass_delta = sum(float(r.get("delta", "0.00").split()[0]) for r in results if isinstance(r.get("delta"), str)) / total_edits if total_edits > 0 else 0.0
+avg_score_delta = sum(float(r.get("score_delta", "0.0000").split()[0]) for r in results if isinstance(r.get("score_delta"), str)) / total_edits if total_edits > 0 else 0.0
+created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+# L1: Summary with YAML frontmatter
+l1_path = os.path.join(validation_base, "01-summary", "findings.md")
+accepted_edits_list = [{"edit_id": r["proposal_id"], "acceptance_reason": r.get("acceptance_reason", "")} for r in results if r["verdict"] == "accepted"]
+rejected_edits_list = [{"edit_id": r["proposal_id"], "acceptance_reason": r.get("acceptance_reason", "")} for r in results if r["verdict"] == "rejected"]
+with open(l1_path, "w", encoding="utf-8") as f:
+    f.write(f"""---
+epoch: {epoch}
+total_edits: {total_edits}
+accepted: {accepted}
+rejected: {rejected}
+accept_rate: {accept_rate}
+avg_pass_rate_delta: {avg_pass_delta}
+avg_weighted_score_delta: {avg_score_delta}
+baseline_pass_rate: {baseline_pass_rate}
+baseline_weighted_score: {baseline_score}
+created_at: {created}
+accepted_edits: {json.dumps(accepted_edits_list)}
+rejected_edits: {json.dumps(rejected_edits_list)}
+---
+
+# Validation Results — Epoch {epoch}
+
+**{accepted} accepted, {rejected} rejected** (accept rate: {accept_rate:.0%})
+
+Average pass rate delta: {avg_pass_delta:+.2f}
+Average weighted score delta: {avg_score_delta:+.4f}
+
+## SOURCES (LAYER 2 NAVIGATION)
+02-analysis/accepted-edits.md
+ -> Per-accepted-edit details with deltas and reasons
+02-analysis/rejected-edits.md
+ -> Per-rejected-edit details with failure reasons
+""")
+
+# L2: Accepted edits
+l2a_path = os.path.join(validation_base, "02-analysis", "accepted-edits.md")
+with open(l2a_path, "w", encoding="utf-8") as f:
+    lines = [f"# Accepted Edits — Epoch {epoch}\n"]
+    for r in results:
+        if r["verdict"] != "accepted":
+            continue
+        lines.append(f"## {r['proposal_id']} ({r['edit_type']})")
+        lines.append(f"- **Reason:** {r.get('acceptance_reason', '')}")
+        lines.append(f"- **Delta:** {r.get('delta', '')}")
+        lines.append(f"- **Score delta:** {r.get('score_delta', '')}")
+        lines.append(f"- **Quality delta:** {r.get('quality_delta', '')}\n")
+    lines.append("\n## SOURCES (LAYER 3 NAVIGATION)\n")
+    for r in results:
+        if r["verdict"] != "accepted":
+            continue
+        lines.append(f"03-dossiers/{r['proposal_id']}.json")
+        lines.append(f" -> Raw validation result for {r['proposal_id']}\n")
+    f.write("\n".join(lines))
+
+# L2: Rejected edits
+l2r_path = os.path.join(validation_base, "02-analysis", "rejected-edits.md")
+with open(l2r_path, "w", encoding="utf-8") as f:
+    lines = [f"# Rejected Edits — Epoch {epoch}\n"]
+    for r in results:
+        if r["verdict"] != "rejected":
+            continue
+        lines.append(f"## {r['proposal_id']} ({r['edit_type']})")
+        lines.append(f"- **Reason:** {r.get('acceptance_reason', '')}")
+        lines.append(f"- **Delta:** {r.get('delta', '')}")
+        lines.append(f"- **Score delta:** {r.get('score_delta', '')}\n")
+    lines.append("\n## SOURCES (LAYER 3 NAVIGATION)\n")
+    for r in results:
+        if r["verdict"] != "rejected":
+            continue
+        lines.append(f"03-dossiers/{r['proposal_id']}.json")
+        lines.append(f" -> Raw validation result for {r['proposal_id']}\n")
+    f.write("\n".join(lines))
+
+# L3: Dossiers — symlink or copy existing per-edit JSON files
+for r in results:
+    src = os.path.join(val_dir, f"epoch-{epoch}-{r['proposal_id']}.json")
+    dst = os.path.join(validation_base, "03-dossiers", f"{r['proposal_id']}.json")
+    if os.path.exists(src):
+        import shutil
+        shutil.copy2(src, dst)
+
+# 00-index.md: navigation + provenance only
+with open(os.path.join(validation_base, "00-index.md"), "w", encoding="utf-8") as f:
+    f.write(f"""# Validation Results — Epoch {epoch}
+
+Artifact-pyramid of validation results for epoch {epoch}.
+
+## Navigation
+
+- [01-summary/findings.md](01-summary/findings.md) — L1: accept/reject counts, aggregate deltas
+- [02-analysis/accepted-edits.md](02-analysis/accepted-edits.md) — L2: per-accepted-edit details
+- [02-analysis/rejected-edits.md](02-analysis/rejected-edits.md) — L2: per-rejected-edit details
+- [03-dossiers/](03-dossiers/) — L3: raw validation result JSON per edit
+
+## Provenance
+
+- **epoch:** {epoch}
+- **generated_by:** SkillOpt validate phase (run-phase.sh)
+- **generated_at:** {created}
+""")
+print(f"  Validation pyramid written: {validation_base}/00-index.md")
 PYEOF
     else
         echo "To run validation, use --exec or:"
@@ -1181,7 +1296,7 @@ PYEOF
         echo "  4. Compare results against baseline"
         echo ""
         echo "Input: $proposal_dir/epoch-$EPOCH.json"
-        echo "Output: $validation_dir/epoch-$EPOCH-*.json"
+        echo "Output: $validation_dir/ -> validation/epoch-$EPOCH/ (artifact-pyramid)"
         echo "See references/artifact-formats.md for validation result schema."
         echo ""
         echo "After validation, run:"
@@ -1463,7 +1578,24 @@ proposals_by_id = {p.get("id"): p for p in proposals.get("proposals", [])}
 
 accepted = 0
 rejected = 0
-for result_file in sorted(glob.glob(os.path.join(val_dir, f"epoch-{epoch}-*.json"))):
+
+# Try reading from validation pyramid first, fall back to flat glob
+validation_pyramid = os.path.join(state_dir, "validation", f"epoch-{epoch}")
+validation_index = os.path.join(validation_pyramid, "00-index.md")
+result_files = []
+if os.path.exists(validation_index):
+    summary_path = os.path.join(validation_pyramid, "01-summary", "findings.md")
+    try:
+        meta = json.loads(open(summary_path).read().split("---", 2)[1])
+        accepted_ids = [e["edit_id"] for e in meta.get("accepted_edits", [])]
+        dossier_dir = os.path.join(validation_pyramid, "03-dossiers")
+        result_files = sorted(os.path.join(dossier_dir, f"{eid}.json") for eid in accepted_ids)
+    except Exception:
+        result_files = []
+if not result_files:
+    result_files = sorted(glob.glob(os.path.join(val_dir, f"epoch-{epoch}-*.json")))
+
+for result_file in result_files:
     result = load_json(result_file)
     if result.get("verdict") != "accepted":
         rejected += 1

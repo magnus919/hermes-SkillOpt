@@ -2,7 +2,59 @@
 
 Every SkillOpt phase writes structured JSON to disk. These schemas define the contract between phases. Downstream phases read from the state directory — nothing depends on LLM context retention.
 
-## Rollout Record (`rollouts/epoch-N-task-X.json`)
+Phase outputs that have been converted to artifact-pyramid format are stored in per-epoch directories with three layers:
+- **L1 (01-summary/findings.md):** YAML frontmatter with machine-parseable metrics. Human-readable summary with SOURCES navigation.
+- **L2 (02-analysis/):** Per-item analysis files. Self-contained, each with SOURCES linking to L3.
+- **L3 (03-dossiers/):** Raw JSON files (schema unchanged from pre-pyramid format).
+
+See the artifact-pyramids skill spec (v0.0.3) for the full format specification.
+
+## Baseline Cache (`baseline/epoch-N/`)
+
+_Pyramid format established in PR #23._ See `baseline/epoch-N/00-index.md` for navigation.
+
+## Validation Results (`validation/epoch-N/`)
+
+_Pyramid format established in [issue #24](https://github.com/magnus919/hermes-SkillOpt/issues/24)._
+
+```
+validation/epoch-<N>/
+├── 00-index.md                    ← navigation + provenance
+├── 01-summary/findings.md         ← L1: YAML frontmatter (epoch, accept_rate, avg deltas)
+├── 02-analysis/
+│   ├── accepted-edits.md          ← L2: per-accepted-edit detail with deltas
+│   └── rejected-edits.md          ← L2: per-rejected-edit detail with failure reasons
+└── 03-dossiers/
+    ├── <edit_id>.json             ← L3: raw validation result JSON (schema unchanged)
+    └── <edit_id>.json
+```
+
+### L1 YAML Frontmatter
+
+```yaml
+epoch: 1
+total_edits: 4
+accepted: 3
+rejected: 1
+accept_rate: 0.75
+avg_pass_rate_delta: 0.08
+avg_weighted_score_delta: 0.12
+baseline_pass_rate: 0.67
+baseline_weighted_score: 0.63
+created_at: "2026-06-03T22:00:00Z"
+accepted_edits:
+  - edit_id: edit-1
+    acceptance_reason: weighted_score_non_regression
+  - edit_id: edit-2
+    acceptance_reason: weighted_score_non_regression
+rejected_edits:
+  - edit_id: edit-3
+    acceptance_reason: pass_rate_regression
+```
+
+### Per-Edit Validation Result (`03-dossiers/<edit_id>.json`)
+
+The per-edit validation result schema is unchanged from the pre-pyramid format:
 
 ```json
 {
