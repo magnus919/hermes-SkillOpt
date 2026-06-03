@@ -499,12 +499,12 @@ proposal_file = os.environ["PROPOSAL_FILE"]
 test_suite = os.environ["TEST_SUITE"]
 val_dir = os.environ["VAL_DIR"]
 hermes = os.environ.get("HERMES", "hermes")
+state_dir = os.path.dirname(val_dir)
 baseline_dir = os.path.join(state_dir, "baseline", f"epoch-{epoch}")
 baseline_index = os.path.join(baseline_dir, "00-index.md")
 baseline_summary = os.path.join(baseline_dir, "01-summary", "findings.md")
 baseline_analysis = os.path.join(baseline_dir, "02-analysis", "per-task-evaluation.md")
 baseline_dossiers = os.path.join(baseline_dir, "03-dossiers")
-state_dir = os.path.dirname(val_dir)
 metadata_file = os.path.join(state_dir, "board-metadata.json")
 
 def load_json(path):
@@ -897,7 +897,7 @@ def load_or_create_baseline(skill_content, val_tasks):
         detail = {"task_id": task_id, "result": verdict}
         details.append(detail)
         raw_outputs.append({"task_id": task_id, "stdout": verdict.get("stdout", ""),
-                            "stderr": verdict.get("stderr", ""), "verdict": verdict})
+                            "stderr": verdict.get("stderr", ""), "result": verdict})
 
     metrics = metrics_from_details(details, metric_weights)
 
@@ -938,7 +938,7 @@ created_at: {created_at}
 The unedited skill was evaluated against {len(val_tasks)} validation tasks.
 
 ## SOURCES (LAYER 2 NAVIGATION)
-{baseline_analysis}
+02-analysis/per-task-evaluation.md
  -> Per-task baseline results with pass/fail and quality breakdown
 """
     with open(baseline_summary, "w", encoding="utf-8") as f:
@@ -960,7 +960,7 @@ The unedited skill was evaluated against {len(val_tasks)} validation tasks.
     analysis_lines.append(f"\n## SOURCES (LAYER 3 NAVIGATION)\n")
     for task in val_tasks:
         tid = task.get("id", "unknown")
-        analysis_lines.append(f"{os.path.join(baseline_dossiers, f'task-{tid}.json')}")
+        analysis_lines.append(f"03-dossiers/task-{tid}.json")
         analysis_lines.append(f" -> Raw validation output for task {tid}\n")
     with open(baseline_analysis, "w", encoding="utf-8") as f:
         f.write("\n".join(analysis_lines))
@@ -1632,7 +1632,7 @@ source: post_merge_refresh
 Post-merge cumulative validation passed. Baseline refreshed.
 
 ## SOURCES (LAYER 2 NAVIGATION)
-{_new_analysis}
+02-analysis/per-task-evaluation.md
  -> Per-task post-merge validation results
 """)
                     with open(_new_analysis, "w", encoding="utf-8") as f:
@@ -1646,7 +1646,7 @@ Post-merge cumulative validation passed. Baseline refreshed.
                             lines.append(f"**Reason:** {r.get('reason', '')}\n")
                         for d in detail_records:
                             tid = d.get("task_id", "unknown")
-                            lines.append(f"{os.path.join(_new_dossiers, f'task-{tid}.json')}")
+                            lines.append(f"03-dossiers/task-{tid}.json")
                             lines.append(f" -> Raw output for task {tid}\n")
                         f.write("\n".join(lines))
                     for d in detail_records:
