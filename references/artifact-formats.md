@@ -69,6 +69,76 @@ The per-edit validation result schema is unchanged from the pre-pyramid format:
 }
 ```
 
+## Rollout Pyramid (`rollout/epoch-N/`)
+
+_Pyramid format established in [issue #27](https://github.com/magnus919/hermes-SkillOpt/issues/27)._
+
+```
+rollout/epoch-<N>/
+├── 00-index.md                    ← navigation + provenance
+├── 01-summary/findings.md         ← L1: YAML frontmatter (epoch, task_count, success_rate)
+├── 02-analysis/
+│   ├── success-patterns.md        ← L2: grouped by successful task outcome
+│   └── failure-patterns.md        ← L2: grouped by failure mode
+└── 03-dossiers/
+    ├── <task_id>.json             ← L3: raw rollout record (schema unchanged)
+    └── <task_id>.json
+```
+
+### L1 YAML Frontmatter
+
+```yaml
+epoch: 1
+task_count: 3
+success_count: 2
+failure_count: 1
+success_rate: 0.6667
+```
+
+### L2 Analysis
+
+`success-patterns.md` lists each successful task with its output summary and execution trace excerpt. `failure-patterns.md` groups failures by `failure_modes` field — multiple tasks with the same failure mode are grouped in a single section.
+
+### L3 Dossiers
+
+Rollout records are copied verbatim (schema unchanged from `rollouts/epoch-N-task-X.json`), keyed by `task_id`.
+
+## Proposal Pyramid (`proposal/epoch-N/`)
+
+_Pyramid format established in [issue #28](https://github.com/magnus919/hermes-SkillOpt/issues/28)._
+
+```
+proposal/epoch-<N>/
+├── 00-index.md                    ← navigation + provenance
+├── 01-summary/findings.md         ← L1: YAML frontmatter (epoch, edit_budget, edit_count)
+├── 02-analysis/
+│   └── per-edit-rationale.md      ← L2: each edit's rationale, risk assessment, impact
+└── 03-dossiers/
+    ├── edit-1.json                ← L3: raw proposal edit JSON (schema unchanged)
+    └── edit-2.json
+```
+
+### L1 YAML Frontmatter
+
+```yaml
+epoch: 1
+edit_budget: 4
+edit_count: 3
+focus_areas: [error-handling, output-format]
+```
+
+### L2 Analysis
+
+`per-edit-rationale.md` documents each proposed edit with:
+- Edit ID, type (add/replace/delete), and location
+- Rationale from the proposal JSON
+- Risk assessment (low/medium/high based on edit scope)
+- SOURCES link to the L3 dossier
+
+### L3 Dossiers
+
+Individual edit JSON objects from the proposals array, one per file named `<edit_id>.json`. Schema unchanged from the proposals JSON.
+
 ## Reflection Document (`reflections/epoch-N.json`)
 
 ```json

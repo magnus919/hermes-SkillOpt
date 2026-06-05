@@ -268,6 +268,161 @@ state_dir = os.environ["STATE_DIR"]
 epoch = os.environ["EPOCH"]
 pyramid_utils.update_root_pyramid(state_dir, epoch)
 PYEOF
+
+        # --- Write per-epoch rollout pyramid ---
+        local rollout_pyramid_dir="$STATE_DIR/rollout/epoch-$EPOCH"
+        mkdir -p "$rollout_pyramid_dir/01-summary" "$rollout_pyramid_dir/02-analysis" "$rollout_pyramid_dir/03-dossiers"
+        shopt -s nullglob
+        rollout_pyramid_files=("$rollout_dir"/epoch-"$EPOCH"-*.json)
+        shopt -u nullglob
+        EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" ROLLOUT_DIR="$rollout_dir" \
+            ROLLOUT_PYRAMID_DIR="$rollout_pyramid_dir" \
+            SCRIPTS_DIR="$SCRIPTS_DIR" PYTHONPATH="$SCRIPTS_DIR:$PYTHONPATH" python3 << 'PYEOF'
+import json, os, sys
+from datetime import datetime, timezone
+
+state_dir = os.environ["STATE_DIR"]
+epoch = os.environ["EPOCH"]
+rollout_dir = os.environ["ROLLOUT_DIR"]
+pyramid_dir = os.environ["ROLLOUT_PYRAMID_DIR"]
+sys.path.insert(0, os.environ.get("SCRIPTS_DIR", os.path.join(state_dir, "scripts")))
+
+# Read all rollout records for this epoch
+rollout_records = []
+import glob
+for f in sorted(glob.glob(os.path.join(rollout_dir, f"epoch-{epoch}-*.json"))):
+    with open(f) as fh:
+        rollout_records.append(json.load(fh))
+
+total = len(rollout_records)
+successes = [r for r in rollout_records if r.get("outcome") == "success"]
+failures = [r for r in rollout_records if r.get("outcome") == "failure"]
+success_count = len(successes)
+failure_count = len(failures)
+success_rate = round(success_count / total, 4) if total > 0 else 0.0
+created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+# 00-index.md
+index_lines = [
+    f"# Rollout — Epoch {epoch}",
+    "",
+    "## Navigation",
+    "",
+    f"- [01-summary/findings.md](01-summary/findings.md) — L1: epoch summary",
+    f"- [02-analysis/success-patterns.md](02-analysis/success-patterns.md) — L2: patterns that worked",
+    f"- [02-analysis/failure-patterns.md](02-analysis/failure-patterns.md) — L2: failure modes",
+    "",
+    "## Provenance",
+    "",
+    f"- epoch: {epoch}",
+    f"- total_records: {total}",
+    f"- success_count: {success_count}",
+    f"- failure_count: {failure_count}",
+    f"- success_rate: {success_rate}",
+    f"- generated_at: {created}",
+]
+with open(os.path.join(pyramid_dir, "00-index.md"), "w") as f:
+    f.write("\n".join(index_lines) + "\n")
+
+# 01-summary/findings.md
+summary_lines = [
+    "---",
+    f"epoch: {epoch}",
+    f"task_count: {total}",
+    f"success_count: {success_count}",
+    f"failure_count: {failure_count}",
+    f"success_rate: {success_rate}",
+    "---",
+    "",
+    f"# Rollout — Epoch {epoch} Summary",
+    "",
+    f"**Tasks:** {total}  ",
+    f"**Passed:** {success_count}  ",
+    f"**Failed:** {failure_count}  ",
+    f"**Pass rate:** {success_rate:.0%}",
+    "",
+    "## SOURCES (LAYER 2 NAVIGATION)",
+    "",
+    "02-analysis/success-patterns.md -> Success patterns across rollout tasks",
+    "02-analysis/failure-patterns.md -> Failure modes across rollout tasks",
+]
+with open(os.path.join(pyramid_dir, "01-summary", "findings.md"), "w") as f:
+    f.write("\n".join(summary_lines) + "\n")
+
+# 02-analysis/success-patterns.md
+suc_lines = [
+    f"# Success Patterns — Epoch {epoch}",
+    "",
+    f"**{success_count} of {total} tasks passed.**",
+    "",
+]
+if success_count > 0:
+    for rec in successes:
+        tid = rec.get("task_id", "unknown")
+        summary = rec.get("output_summary", "") or rec.get("outcome", "")
+        trace = rec.get("execution_trace", "")[:200]
+        suc_lines.append(f"### Task: {tid}")
+        suc_lines.append("")
+        suc_lines.append(f"**Summary:** {summary}")
+        if trace:
+            suc_lines.append(f"**Trace excerpt:** {trace}")
+        suc_lines.append("")
+        suc_lines.append("**SOURCES (LAYER 3):**")
+        suc_lines.append(f"03-dossiers/{tid}.json -> Full rollout record")
+        suc_lines.append("")
+else:
+    suc_lines.append("_No successful tasks in this epoch._")
+suc_lines.append("## SOURCES (LAYER 2 NAVIGATION)")
+suc_lines.append("01-summary/findings.md -> Epoch summary")
+with open(os.path.join(pyramid_dir, "02-analysis", "success-patterns.md"), "w") as f:
+    f.write("\n".join(suc_lines) + "\n")
+
+# 02-analysis/failure-patterns.md
+fail_lines = [
+    f"# Failure Patterns — Epoch {epoch}",
+    "",
+    f"**{failure_count} of {total} tasks failed.**",
+    "",
+]
+if failure_count > 0:
+    # Group by failure mode
+    failure_by_mode = {}
+    for rec in failures:
+        modes = rec.get("failure_modes", ["unknown"])
+        mode_key = "; ".join(modes) if isinstance(modes, list) else str(modes)
+        failure_by_mode.setdefault(mode_key, []).append(rec)
+    for mode, recs in sorted(failure_by_mode.items()):
+        fail_lines.append(f"### Pattern: {mode}")
+        fail_lines.append("")
+        fail_lines.append(f"Affected {len(recs)} task(s):")
+        for rec in recs:
+            tid = rec.get("task_id", "unknown")
+            fail_lines.append(f"- **{tid}** — {rec.get('output_summary', 'No summary')[:120]}")
+        fail_lines.append("")
+        fail_lines.append("**SOURCES (LAYER 3):**")
+        for rec in recs:
+            tid = rec.get("task_id", "unknown")
+            fail_lines.append(f"03-dossiers/{tid}.json -> {tid} rollout record")
+        fail_lines.append("")
+else:
+    fail_lines.append("_No failures in this epoch._")
+fail_lines.append("## SOURCES (LAYER 2 NAVIGATION)")
+fail_lines.append("01-summary/findings.md -> Epoch summary")
+with open(os.path.join(pyramid_dir, "02-analysis", "failure-patterns.md"), "w") as f:
+    f.write("\n".join(fail_lines) + "\n")
+
+# 03-dossiers/ — copy each rollout JSON by task_id
+for rec in rollout_records:
+    tid = rec.get("task_id", "unknown")
+    dst = os.path.join(pyramid_dir, "03-dossiers", f"{tid}.json")
+    with open(dst, "w") as f:
+        json.dump(rec, f, indent=2)
+
+print(f"  Rollout pyramid written: {pyramid_dir} ({total} records)")
+PYEOF
+
+        echo ""
+        echo "Rollout pyramid written to: $rollout_pyramid_dir"
     else
         # Print guidance
         echo "To execute rollouts, run with --exec or run the following for each task:"
@@ -480,6 +635,130 @@ print(f'  Proposals written: $proposal_dir/epoch-$EPOCH.json ({len(proposals)} e
 import os, sys; import pyramid_utils
 pyramid_utils.update_root_pyramid(os.environ["STATE_DIR"], os.environ["EPOCH"])
 PYEOF
+
+        # --- Write per-epoch proposal pyramid ---
+        local proposal_pyramid_dir="$STATE_DIR/proposal/epoch-$EPOCH"
+        mkdir -p "$proposal_pyramid_dir/01-summary" "$proposal_pyramid_dir/02-analysis" "$proposal_pyramid_dir/03-dossiers"
+        EPOCH="$EPOCH" PROPOSAL_FILE="$proposal_dir/epoch-$EPOCH.json" \
+            PROPOSAL_PYRAMID_DIR="$proposal_pyramid_dir" \
+            EDIT_BUDGET="$EDIT_BUDGET" python3 << 'PYEOF'
+import json, os
+from datetime import datetime, timezone
+
+epoch = os.environ["EPOCH"]
+proposal_file = os.environ["PROPOSAL_FILE"]
+pyramid_dir = os.environ["PROPOSAL_PYRAMID_DIR"]
+edit_budget = int(os.environ.get("EDIT_BUDGET", "4"))
+
+with open(proposal_file) as f:
+    data = json.load(f)
+
+proposals = data.get("proposals", [])
+edit_count = len(proposals)
+focus_areas = sorted(set(
+    p.get("location", "").split(",")[0].strip()
+    for p in proposals if p.get("location")
+))
+created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+# Extract edit budget from proposals data if available
+budget = data.get("budget", edit_budget)
+
+# 00-index.md
+index_lines = [
+    f"# Proposals — Epoch {epoch}",
+    "",
+    "## Navigation",
+    "",
+    f"- [01-summary/findings.md](01-summary/findings.md) — L1: proposal summary",
+    f"- [02-analysis/per-edit-rationale.md](02-analysis/per-edit-rationale.md) — L2: per-edit rationale",
+    "",
+    "## Provenance",
+    "",
+    f"- epoch: {epoch}",
+    f"- edit_budget: {budget}",
+    f"- edit_count: {edit_count}",
+    f"- focus_areas: {', '.join(focus_areas) if focus_areas else 'none'}",
+    f"- generated_at: {created}",
+]
+with open(os.path.join(pyramid_dir, "00-index.md"), "w") as f:
+    f.write("\n".join(index_lines) + "\n")
+
+# 01-summary/findings.md
+summary_lines = [
+    "---",
+    f"epoch: {epoch}",
+    f"edit_budget: {budget}",
+    f"edit_count: {edit_count}",
+    f"focus_areas: [{', '.join(focus_areas) if focus_areas else 'none'}]",
+    "---",
+    "",
+    f"# Proposals — Epoch {epoch} Summary",
+    "",
+    f"**Edit budget:** {budget}  ",
+    f"**Edits proposed:** {edit_count}  ",
+    f"**Focus areas:** {', '.join(focus_areas) if focus_areas else 'none'}",
+    "",
+    "## SOURCES (LAYER 2 NAVIGATION)",
+    "",
+    "02-analysis/per-edit-rationale.md -> Rationale for each proposed edit",
+]
+with open(os.path.join(pyramid_dir, "01-summary", "findings.md"), "w") as f:
+    f.write("\n".join(summary_lines) + "\n")
+
+# 02-analysis/per-edit-rationale.md
+edit_lines = [
+    f"# Per-Edit Rationale — Epoch {epoch}",
+    "",
+    f"**{edit_count} edits proposed** (budget: {budget}).",
+    "",
+]
+if edit_count > 0:
+    for i, prop in enumerate(proposals):
+        eid = prop.get("id", f"edit-{i+1}")
+        etype = prop.get("type", "replace")
+        loc = prop.get("location", "unknown")
+        rationale = prop.get("rationale", "No rationale provided.")
+        old_text = prop.get("old_text", "")
+        new_text = prop.get("new_text", "")
+
+        # Risk assessment
+        risk = "low"
+        if etype == "replace" and new_text and len(new_text) > 200:
+            risk = "medium"
+        elif etype == "delete" and old_text and len(old_text) > 100:
+            risk = "medium"
+        if etype == "replace" and len(new_text) > 500:
+            risk = "high"
+
+        edit_lines.append(f"### {eid} ({etype})")
+        edit_lines.append("")
+        edit_lines.append(f"**Location:** {loc}")
+        edit_lines.append(f"**Risk:** {risk}")
+        edit_lines.append(f"**Rationale:** {rationale}")
+        edit_lines.append("")
+        edit_lines.append("**SOURCES (LAYER 3):**")
+        edit_lines.append(f"03-dossiers/{eid}.json -> Full proposal record")
+        edit_lines.append("")
+else:
+    edit_lines.append("_No edits proposed in this epoch._")
+edit_lines.append("## SOURCES (LAYER 2 NAVIGATION)")
+edit_lines.append("01-summary/findings.md -> Epoch summary")
+with open(os.path.join(pyramid_dir, "02-analysis", "per-edit-rationale.md"), "w") as f:
+    f.write("\n".join(edit_lines) + "\n")
+
+# 03-dossiers/ — one JSON per edit
+for i, prop in enumerate(proposals):
+    eid = prop.get("id", f"edit-{i+1}")
+    dst = os.path.join(pyramid_dir, "03-dossiers", f"{eid}.json")
+    with open(dst, "w") as f:
+        json.dump(prop, f, indent=2)
+
+print(f"  Proposal pyramid written: {pyramid_dir} ({edit_count} edits)")
+PYEOF
+
+        echo ""
+        echo "Proposal pyramid written to: $proposal_pyramid_dir"
     else
         echo "To generate proposals, run with --exec or manually craft up to $EDIT_BUDGET edits."
         echo ""
