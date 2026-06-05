@@ -297,6 +297,26 @@ class RunPostMergeTaskTokenEstimateTests(unittest.TestCase):
             "factored into the success-path formula)",
         )
 
+    def test_buggy_formula_excludes_stderr(self) -> None:
+        """Pre-fix formula produces a lower estimate when stderr is non-empty.
+
+        This is the negative test from issue #21 that proves the bug existed.
+        The buggy formula (missing stderr) must always be <= the fixed formula
+        (including stderr), and strictly less when stderr is non-empty.
+        """
+        prompt = "x" * 100
+        skill_text = "x" * 100
+        stdout = "x" * 50
+        stderr = "x" * 50
+        buggy = _buggy_success_token_estimate(prompt, skill_text, stdout, stderr)
+        fixed = _expected_success_token_estimate(prompt, skill_text, stdout, stderr)
+        self.assertLess(
+            buggy,
+            fixed,
+            "buggy formula (no stderr) should produce a lower token_estimate "
+            "than the fixed formula when stderr is non-empty",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
