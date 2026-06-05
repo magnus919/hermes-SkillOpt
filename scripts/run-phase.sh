@@ -272,9 +272,6 @@ PYEOF
         # --- Write per-epoch rollout pyramid ---
         local rollout_pyramid_dir="$STATE_DIR/rollout/epoch-$EPOCH"
         mkdir -p "$rollout_pyramid_dir/01-summary" "$rollout_pyramid_dir/02-analysis" "$rollout_pyramid_dir/03-dossiers"
-        shopt -s nullglob
-        rollout_pyramid_files=("$rollout_dir"/epoch-"$EPOCH"-*.json)
-        shopt -u nullglob
         EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" ROLLOUT_DIR="$rollout_dir" \
             ROLLOUT_PYRAMID_DIR="$rollout_pyramid_dir" \
             SCRIPTS_DIR="$SCRIPTS_DIR" PYTHONPATH="$SCRIPTS_DIR:$PYTHONPATH" python3 << 'PYEOF'
@@ -724,12 +721,12 @@ if edit_count > 0:
 
         # Risk assessment
         risk = "low"
-        if etype == "replace" and new_text and len(new_text) > 200:
+        if etype == "replace" and new_text and len(new_text) > 500:
+            risk = "high"
+        elif etype == "replace" and new_text and len(new_text) > 200:
             risk = "medium"
         elif etype == "delete" and old_text and len(old_text) > 100:
             risk = "medium"
-        if etype == "replace" and len(new_text) > 500:
-            risk = "high"
 
         edit_lines.append(f"### {eid} ({etype})")
         edit_lines.append("")
