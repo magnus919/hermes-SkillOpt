@@ -12,6 +12,7 @@ metadata:
     related_skills: [kanban-orchestrator, kanban-worker, plan]
     requires_toolsets: [terminal, kanban]
 source_repo: "https://github.com/magnus919/hermes-SkillOpt"
+metadata.hermes.tags: []
 ---
 
 # SkillOpt — Controlled Skill Optimization for Hermes Agent
