@@ -1,7 +1,7 @@
 ---
 name: skillopt
 description: Run controlled skill optimization cycles on any skill document. Uses kanban-based pipelines with validation gates — the methodology from Microsoft Research's SkillOpt (arXiv 2605.23904).
-version: 1.2.28
+version: 1.2.29
 author: Jasper (on behalf of Magnus Hedemark)
 license: MIT
 compatibility: Hermes Agent only — uses hermes kanban and hermes oneshot — not compatible with Claude Code, Copilot, OpenCode, or Cursor
@@ -56,8 +56,9 @@ Before running any rollouts, audit the target skill's `description` field. Per S
 
 **Checks:**
 1. **Imperative phrasing** — Does the description start with a directive verb ("Use", "Build", "Deploy")? Passive descriptions ("This skill does...") trigger less reliably.
-2. **Negative boundaries** — Does it say when NOT to use the skill? Without negative boundaries, the skill over-triggers on near-miss prompts.
-3. **Trigger coverage** — Test 5 representative prompts that should trigger the skill and 5 near-miss prompts that should not. If trigger accuracy is below 80%, propose description edits alongside body edits.
+2. **Directives, not essays** — Is the description a directive ("Use the Interactions API if you're building a chat application") or an explanation ("The Interactions API is recommended for multi-chat because it handles session state")? Models follow directives; they infer implications from essays unreliably. Rewrite explanations as directives.
+3. **Negative boundaries** — Does it say when NOT to use the skill? Without negative boundaries, the skill over-triggers on near-miss prompts.
+4. **Trigger coverage** — Test 5 representative prompts that should trigger the skill and 5 near-miss prompts that should not. If trigger accuracy is below 80%, propose description edits alongside body edits.
 
 **Entry:** Target skill's `description` field
 **Exit:** Description audit result (pass/fail per check) + proposed description edits if needed
@@ -93,6 +94,8 @@ Based on the reflection, propose 1-4 specific, targeted edits to the skill docum
 **No-op scan before any add-type edit.** Per Schmid (credit to Matt Pocock), AI-generated skills accumulate no-op instructions — phrases that consume context tokens without changing agent behavior. Common no-ops: "write clear, high-quality code", "follow best practices", "handle errors appropriately", "ensure high quality", "make it easy to read", "write maintainable code". Before proposing to add content, scan the existing skill for no-ops in the vicinity of the proposed edit. If a no-op exists, propose a **delete** edit to remove it alongside (or instead of) the add. Removing a no-op is a free token-efficiency gain that never changes task pass rate. The most impactful edit is sometimes the one that removes text, not adds it.
 
 **Portfolio-awareness check for framework/comparison skills.** When the skill being optimized is part of a portfolio of sibling skills that serve related purposes (e.g., framework skills like LlamaIndex, LangGraph, PydanticAI), add a pre-Propose check: does the skill help agents choose between sibling skills? If the skill covers a domain where the user has multiple alternative skills, one of the proposals should add or improve a routing/comparison table that maps scenarios to the correct sibling skill. This prevents the optimized skill from existing in isolation — agents need to know when to reach for THIS skill vs a sibling, not just how to use THIS skill. This session's llamaindex greenfield run is the worked example: the user corrected the initial flat "When NOT to Use" list into a fully cross-referenced Framework Routing Guide covering 5 competing frameworks.
+
+**Over-prescription detection.** Per Schmid: "If the workflow is always the same, you should not use skills. Maybe you should write a script." When reviewing rollout trajectories, watch for skills that prescribe rigid step-by-step procedures for deterministic workflows. If a skill's instructions are a fixed sequence that never varies by task ("Step 1: read the config. Step 2: update the port. Step 3: deploy."), the skill is over-prescribed — it wastes model tokens on a procedure that should be a script. Propose replacing rigid procedures with goals and constraints: "If the config needs changing, here's the file, make the change" instead of "Read the config, update the port, and deploy again." The model knows how to do the steps; it needs to know the goal and the boundaries.
 
 **Entry:** Reflection document
 **Exit:** Proposed edits (1-4), each with: type (add/replace/delete), location, old_text/new_text, rationale
@@ -335,6 +338,8 @@ This skill implements the methodology described in:
 
 - **SkillOpt:** Yifan Yang et al., "Controllable Text-Space Optimization for Agent Skills" (arXiv 2605.23904, 2025)
 - **SkillLens:** Microsoft Research, "A Systematic Study of Model-Generated Agent Skills" (arXiv 2605.23899, 2025)
+
+Additional insights on description quality, no-op removal, negative test cases, token efficiency, and over-prescription detection are drawn from Philipp Schmid's agent skills writing (philschmid.de, 2026), particularly "Don't Ship Skills Without Evals" (AI Engineer talk) and "Testing Agent Skills" (blog).
 
 The kanban execution substrate is provided by Hermes Agent.
 
