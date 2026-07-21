@@ -79,8 +79,10 @@ The target LLM (any model you'd normally use with Hermes) executes a set of trai
 
 Review the rollout trajectories in a batch. Identify what went wrong, under what conditions, and what kind of change would address those failures. Batching prevents overfitting to any single failure mode.
 
-**Entry:** Trajectory records from Phase 1
-**Exit:** Reflection document with identified failure patterns categorized by frequency and severity
+**Ablation baseline comparison.** When feasible, include 1-2 rollout tasks run WITHOUT the skill (bare model, no skill loaded). Compare the skill-on trajectories against the skill-off trajectories for the same tasks. Instructions that produce identical behavior with and without the skill are candidates for removal or compression — they are not earning their context cost. This is not a retirement signal (the skill may be essential on other models or harnesses); it is an improvement signal that identifies dead-weight instructions within the skill. Record the ablation comparison in the reflection document alongside the failure patterns.
+
+**Entry:** Trajectory records from Phase 1 (+ optional ablation baseline)
+**Exit:** Reflection document with identified failure patterns categorized by frequency and severity, plus ablation observations (which instructions changed behavior vs. which did not)
 
 #### 3. Propose — Generate bounded edits
 

@@ -18,6 +18,23 @@ This is the non-negotiable methodological requirement. If you can't define 3 dis
 
 For the first run, start with the Small configuration. A full 4-epoch cycle completes quickly and tells you whether the methodology is providing signal for this skill.
 
+## Negative Test Cases (Required)
+
+Per Schmid (Google DeepMind, AI Engineer 2026), over-triggering from broad descriptions is a primary failure mode. **Every test suite must include negative cases** — tasks where the skill should NOT trigger or should NOT produce its specialized output.
+
+**Minimum:** 2 negative cases per suite (training and validation each). For skills with meaningful overlap with siblings, use 3-5.
+
+**Good negative cases are near-misses**, not obviously irrelevant tasks:
+- Weak: "Write a fibonacci function" (no keyword overlap, tests nothing)
+- Strong: "I need to update the formulas in my Excel budget spreadsheet" (shares "spreadsheet" and "data" concepts with a CSV analysis skill, but needs Excel editing, not CSV analysis)
+
+**What negative cases test:**
+1. **Description precision** — Does the skill correctly NOT trigger on near-miss prompts?
+2. **Boundary behavior** — If the skill does trigger, does it correctly recognize the task is outside its scope and defer?
+3. **Cross-harness consistency** — A skill that over-triggers on one harness may not on another. Negative cases catch this.
+
+Record negative case results separately from positive cases in the rollout artifacts. A skill that passes all positive cases but fails negative cases (over-triggers) has a description problem, not a body problem — fix it in Phase 0, not in Propose.
+
 ## Metric Design
 
 Each validation task should define both a hard pass/fail condition and a quality rubric. The runner records four weighted criteria, in priority order:
