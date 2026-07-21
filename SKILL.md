@@ -50,6 +50,20 @@ This means: **do not evaluate skill changes by reading the skill.** Evaluate by 
 
 Training and validation task sets MUST be distinct. This is not optional.
 
+### Phase 0 — Description Audit (before first Rollout)
+
+Before running any rollouts, audit the target skill's `description` field. Per Schmid (Google DeepMind, AI Engineer 2026), **50% of skill failures trace to incorrect triggering from weak descriptions.** A skill whose body is perfectly optimized but whose description fails to trigger is invisible.
+
+**Checks:**
+1. **Imperative phrasing** — Does the description start with a directive verb ("Use", "Build", "Deploy")? Passive descriptions ("This skill does...") trigger less reliably.
+2. **Negative boundaries** — Does it say when NOT to use the skill? Without negative boundaries, the skill over-triggers on near-miss prompts.
+3. **Trigger coverage** — Test 5 representative prompts that should trigger the skill and 5 near-miss prompts that should not. If trigger accuracy is below 80%, propose description edits alongside body edits.
+
+**Entry:** Target skill's `description` field
+**Exit:** Description audit result (pass/fail per check) + proposed description edits if needed
+
+Description edits are proposed and validated through the same pipeline as body edits — they go through Propose, Validate, and Merge like any other change.
+
 ### The Six Phases
 
 #### 1. Rollout — Execute the current skill against training tasks
@@ -74,6 +88,8 @@ Based on the reflection, propose 1-4 specific, targeted edits to the skill docum
 
 **Before writing any "add" or "expand" edits, verify the content doesn't already exist elsewhere in the skill.** A common failure mode (the "buried content" trap) is proposing to add new content — rules, warnings, examples — when that content already exists in the Pitfalls section, a reference file, or a different part of the procedure. The rollout may have revealed that agents aren't *following* the existing content, not that it's missing. If the content exists but isn't discoverable, the fix is prominence (cross-references, hard-gates, blockquote alerts), not duplication. Search the entire skill document and all linked reference files before writing an add-type edit.
 
+**No-op scan before any add-type edit.** Per Schmid (credit to Matt Pocock), AI-generated skills accumulate no-op instructions — phrases that consume context tokens without changing agent behavior. Common no-ops: "write clear, high-quality code", "follow best practices", "handle errors appropriately", "ensure high quality", "make it easy to read", "write maintainable code". Before proposing to add content, scan the existing skill for no-ops in the vicinity of the proposed edit. If a no-op exists, propose a **delete** edit to remove it alongside (or instead of) the add. Removing a no-op is a free token-efficiency gain that never changes task pass rate. The most impactful edit is sometimes the one that removes text, not adds it.
+
 **Portfolio-awareness check for framework/comparison skills.** When the skill being optimized is part of a portfolio of sibling skills that serve related purposes (e.g., framework skills like LlamaIndex, LangGraph, PydanticAI), add a pre-Propose check: does the skill help agents choose between sibling skills? If the skill covers a domain where the user has multiple alternative skills, one of the proposals should add or improve a routing/comparison table that maps scenarios to the correct sibling skill. This prevents the optimized skill from existing in isolation — agents need to know when to reach for THIS skill vs a sibling, not just how to use THIS skill. This session's llamaindex greenfield run is the worked example: the user corrected the initial flat "When NOT to Use" list into a fully cross-referenced Framework Routing Guide covering 5 competing frameworks.
 
 **Entry:** Reflection document
@@ -82,6 +98,8 @@ Based on the reflection, propose 1-4 specific, targeted edits to the skill docum
 #### 4. Validate — Test each edit against held-out tasks
 
 This is the heart of the methodology. Apply each proposed edit to a copy of the skill. Run the validation task suite with the edited skill. Compare against the baseline metrics. Accept edits that improve or maintain performance. Reject the rest.
+
+**Token efficiency is a secondary validation criterion.** Per Schmid's "always-paid context cost" insight, every token in a skill competes for context window space on every invocation. When comparing baseline and candidate, record token counts alongside pass rates. Accept edits that maintain pass rate while reducing token cost. Reject edits that improve pass rate by a marginal amount (≤2%) but increase token cost by >20%. A skill that passes all tasks at 2000 tokens is better than one that passes the same tasks at 5000 tokens — especially in multi-skill environments where every token in one skill competes with every other skill.
 
 **Entry:** Proposed edits + validation task suite + baseline metrics
 **Exit:** Accepted edits (merged into deployment candidate) + rejected edits (stored in buffer with rationale and metrics) + validation dossiers at `03-dossiers/epoch-N-validation-edit-X.json` consumed by the root pyramid (`update_root_pyramid()` in `scripts/pyramid_utils.py`)
