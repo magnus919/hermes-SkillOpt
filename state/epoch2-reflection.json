@@ -1,0 +1,63 @@
+{
+  "epoch": 2,
+  "version": "1.0.1",
+  "focus": "Decision guidance",
+  "rollout_summary": {
+    "train-04-data-chart": {
+      "status": "passed",
+      "init_used": true,
+      "gsap_used": true,
+      "key_findings": [
+        "Agent used `blank` template — noted the 9 templates listed in the skill don't actually exist in HyperFrames (only `blank`, `title-card`, `video-edit` are real)",
+        "Template choice was a guess — no decision guidance in the skill for template selection",
+        "Composition passed lint/validate/inspect/render"
+      ]
+    },
+    "train-05-sports-promo": {
+      "status": "passed",
+      "init_used": true,
+      "gsap_used": true,
+      "key_findings": [
+        "Agent correctly chose shader transitions for HIGH energy mood (consulted mood/energy table in features.md)",
+        "Epoch 1's transition reference pointer worked as intended",
+        "0 lint errors, all validation passed"
+      ]
+    },
+    "train-06-prod-render": {
+      "status": "passed",
+      "init_used": true,
+      "gsap_used": true,
+      "key_findings": [
+        "Agent used --quality high for client deliverable — good decision",
+        "Could NOT use --docker because Docker daemon wasn't running — no fallback workflow documented",
+        "No render-config decision guidance exists in the skill"
+      ]
+    }
+  },
+  "failure_patterns": [
+    {
+      "severity": "high",
+      "frequency": "1/3 agents (template choice task)",
+      "pattern": "The skill lists 9 templates (`warm-grain`, `play-mode`, `swiss-grid`, `vignelli`, `decision-tree`, `kinetic-type`, `product-promo`, `nyt-graph`, `blank`) but only `blank`, `title-card`, and `video-edit` actually exist in HyperFrames. 6 of 9 listed templates don't exist. This is a factual error that wastes agent time on non-existent commands.",
+      "impact": "Agents attempt non-existent `--example` flags or waste context on template names that can't be used."
+    },
+    {
+      "severity": "medium",
+      "frequency": "2/3 tasks involving render decisions",
+      "pattern": "No render-config decision guidance exists in the Procedure. Agents must infer --quality/--format/--docker choices from the CLI reference table without any when-to-use guidance.",
+      "impact": "Inconsistent decision-making across tasks. Docker assumed available but has no fallback workflow."
+    },
+    {
+      "severity": "low",
+      "frequency": "1/3 agents",
+      "pattern": "Template selection has no decision table. When faced with a data-viz task, the agent had to guess which template (if any) maps to data visualization.",
+      "impact": "Template selection is arbitrary rather than intentional."
+    }
+  ],
+  "epoch_1_edit_effectiveness": {
+    "scaffold_hard_gate": "100% compliance — all agents used init (was 33% in baseline)",
+    "gsap_only_gate": "100% compliance — all agents used GSAP (was 67% in baseline)",
+    "transition_reference": "Effective — train-05 agent consulted mood/energy table and chose correctly",
+    "blog_companion_gate": "Not triggered in any training task"
+  }
+}

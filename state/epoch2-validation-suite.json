@@ -1,0 +1,45 @@
+{
+  "type": "validation",
+  "epoch": 2,
+  "skill_target": "/Users/magnus/.hermes/skills/creative/hyperframes/SKILL.md",
+  "focus": "Decision guidance validation \u2014 different contexts, same decision dimensions",
+  "tasks": [
+    {
+      "id": "val-04-wellness-brand",
+      "instruction": "Create a 12-second 1920x1080 calm wellness brand video for 'Serene Spaces'. Gentle transitions between intro (0-4s), testimonial (4-8s), closing (8-12s). Soft tones.",
+      "input_data": "Warm ivory bg (#f5efe6), sage green accent (#7a9d7a), dark text (#2d2d2d). Font: Lora serif.",
+      "expected_outcome": "Agent selects CSS-based transitions (blur crossfade or light leak) matching the 'calm' mood, not shader transitions.",
+      "success_criteria": "Transition type matches 'calm' mood from features.md table (CSS: blur crossfade, focus pull, light leak). Uses entrance animations. Final scene fades out. lint passes.",
+      "tags": [
+        "css-vs-shader",
+        "calm",
+        "mood-appropriate"
+      ]
+    },
+    {
+      "id": "val-05-explainer-render",
+      "instruction": "Create a 15-second 1920x1080 technical explainer for 'DataSync API'. Multiple diagram-style scenes. Target: iterate quickly (3+ revisions expected), then final render.",
+      "input_data": "Light bg (#f8f9fa), dark blue accent (#1a56db), dark text (#1f2937). Font: system sans-serif.",
+      "expected_outcome": "Agent uses --quality draft for iteration and --quality high for final render. Appropriate template choice for technical/API content.",
+      "success_criteria": "Two render stages: draft for iteration, high for final. Template choice appropriate for technical content. lint passes on both iterations.",
+      "tags": [
+        "render-quality",
+        "iteration-workflow",
+        "template-choice"
+      ]
+    },
+    {
+      "id": "val-06-transparent-webm",
+      "instruction": "Create a 10-second 1080x1920 vertical overlay video for livestreaming in OBS. It will be composited over a game feed, so needs a transparent background. Animated lower-third style content with player name and stats.",
+      "input_data": "No background (transparent). Bright text colors on gameplay. Player: 'Phoenix', K/D: 2.4, Win rate: 68%.",
+      "expected_outcome": "Agent selects webm format (transparency support) and designs for overlay use (no background, compositable layout).",
+      "success_criteria": "--format webm used (required for transparency). No solid background color. Composition designed for overlay (positioned, not full-frame). lint passes.",
+      "tags": [
+        "format-choice",
+        "webm",
+        "overlay",
+        "vertical"
+      ]
+    }
+  ]
+}

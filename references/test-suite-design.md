@@ -54,6 +54,48 @@ Validation tasks: "Extract entities from a different conversation" (with known g
 
 Measurement: Precision and recall of extracted entities against ground truth.
 
+### Creative / Video Composition Skills (e.g., `hyperframes`, `manim-video`)
+
+Training tasks: "Create a [type] video composition using [tool/pattern] with [specific constraints]"
+Validation tasks: "Create a different [type] video composition using [same tool] with [different constraints]"
+
+Measurement: Binary compliance checks — Did the agent use `npx hyperframes init`? Did they use GSAP timelines (not WAAPI)? Did they run lint/validate/inspect? Did the render produce a non-zero output at the correct duration? For skills where all rollouts structurally pass, measure compliance improvement rather than correctness (e.g., "3/3 agents used the scaffold command after edits, vs 1/3 at baseline").
+
+**Distinction from Code/Tool skills:** Creative skills often produce valid output even when the agent skips the toolchain entirely (e.g., writing standalone HTML that plays in a browser but can't render to video). Validation must check toolchain compliance, not just output validity.
+
+### Knowledge / Instruction Skills (e.g., `github-runner`, `hugo-theme`)
+
+These skills teach the agent *how to do something* — they're reference manuals for procedures, not tools the agent invokes. Rollouts test whether an agent using the skill produces correct guidance, not whether it successfully runs a command.
+
+**Training tasks:** Give the agent a scenario that requires the skill's knowledge to answer correctly. Evaluate against ground truth from authoritative documentation.
+
+**Validation tasks:** Same pattern, held-out scenarios, different concrete details.
+
+**Measurement:** Structured checklist against ground truth. Did the agent use the right flags? Did it recommend the right approach? Did it correctly explain the trade-offs?
+
+**Worked example from github-runner Epoch 1:**
+
+```
+Task: Produce a docker-compose.yml for a self-hosted runner targeting
+      repo magnus919/SlopSearX. Explain the registration flow.
+
+Ground truth checklist:
+- [ ] Uses ACCESS_TOKEN, not RUNNER_TOKEN
+- [ ] REPO_URL set to https://github.com/magnus919/SlopSearX
+- [ ] RUNNER_SCOPE=repo
+- [ ] LABELS includes self-hosted,linux,x64,slopsearx
+- [ ] EPHEMERAL=false (string, not 0)
+- [ ] Docker socket mounted
+- [ ] Registration flow explains ACCESS_TOKEN generates tokens dynamically
+- [ ] PAT scopes correct (repo for repo-level)
+```
+
+**Key difference from Tool skills:** You cannot run the output — you check it against documented conventions. The evaluation is a structured diff between what the agent produced and what the authoritative source says is correct.
+
+**Subagent-based delivery pattern:** Use `delegate_task` with the skill content included in the delegation context string. The subagent loads the skill instructions as part of its task, produces output, and you evaluate against the rubric. This session's Epoch 1 ran 4 training tasks in parallel via `delegate_task` with full success — each subagent produced correct output that scored 92-100% against the rubric.
+
+**Subagent context design for knowledge skills:** Include the skill's critical procedural rules directly in the delegation context. A bare "load the skill" instruction is insufficient — the subagent won't auto-load it. The context must contain the actual structural requirements, flag values, and pitfalls.
+
 ### Code / Tool Skills (e.g., `forgejo-cli`, `arr-cli`)
 
 Training tasks: "Run command X against a test environment"
@@ -66,6 +108,22 @@ Measurement: Correct exit code, correct output format, no unintended side effect
 - **Don't use the same domain for train and val if the domain is narrow.** If all your tasks are "summarize spreadsheet cell A1," you're testing one thing. Better: a mix of different cell types, formulas, and error states.
 - **Don't make validation tasks harder than training tasks.** If the validation set is consistently harder, the gate will reject good edits. Train and val should be comparable difficulty.
 - **Don't use subjective evaluation.** "Did the output look good" is not measurable. Use binary pass/fail criteria where possible: "Did the output have the correct JSON structure?" "Did the command exit 0?"
+
+## Creative Skills: Special Considerations
+
+For skills with subjective outputs (image generation, writing, design), SkillOpt still works but with an additional constraint: **the acceptance criteria themselves may need validation before the validation gate runs.**
+
+### The criteria-iteration trap
+
+When you write success criteria for a creative task, the criteria you think define "good output" may not match what the user considers good. This session's image-magnus919 Epoch 2 is the worked example: the initial SUBJECT validation criteria included a "30-word max" constraint that the user correctly rejected. The subject that produced the best cover was 60+ words and richly detailed — the limit would have penalized the best output.
+
+### How to avoid this
+
+1. **Propose acceptance criteria during the Propose phase, not the Validate phase.** Before running validation, present your criteria to the user: "Here's how I plan to evaluate success — [criteria]. Does this match what you'd consider good?"
+2. **Be explicit about what you're measuring.** "SUBJECT must be one line" is measurable. "Image must look good" is not. Frame each criterion as a binary check.
+3. **Expect iteration on criteria.** The first set may be too tight (over-constraining the creative output), too loose (not distinguishing good from bad), or measuring the wrong thing. Iterate the criteria until the user agrees, then run validation.
+4. **Document the corrected criteria.** After user sign-off, update the task definitions with the final criteria. This prevents re-proposing the same wrong criteria in future epochs.
+5. **Tight criteria can still catch real quality issues.** Even with subjective output, you can measure: Did the template get modified? Was the output format wrong? Was the reference path incorrect? Focus criteria on the procedural aspects that are universally valid.
 
 ## Task Format
 

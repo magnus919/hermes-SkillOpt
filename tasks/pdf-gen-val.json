@@ -1,0 +1,23 @@
+[
+  {
+    "id": "val-full-workflow-stress",
+    "instruction": "Run the complete pdf-generation workflow: writer profile drafts a 3-page architecture report markdown \u2192 renderer profile generates PDF using the skill \u2192 QA gate inspects the output \u2192 if any defects found (LR flowcharts, ASCII art, orphaned lines, tiny fonts, inline width styles), route back to rendering \u2192 repeat until QA passes \u2192 deliver. The workflow must handle at least one rejection loop correctly.",
+    "success_criteria": "Full workflow completes. At least one QA rejection loop occurs and is resolved. Final PDF has zero defects per the QA checklist. Kanban card shows the full transition history.",
+    "tags": [
+      "workflow",
+      "qa-gate",
+      "rework",
+      "end-to-end"
+    ]
+  },
+  {
+    "id": "val-empty-rework",
+    "instruction": "Generate a PDF from clean markdown (no LR flowcharts, no ASCII art, proper CSS sizing, appropriate font sizes). Run the QA gate. It should pass on the first try with no rework loop.",
+    "success_criteria": "QA passes on first attempt. No rework loop triggered. Kanban transitions are clean: render \u2192 QA pass \u2192 deliver.",
+    "tags": [
+      "qa-gate",
+      "no-rework",
+      "happy-path"
+    ]
+  }
+]

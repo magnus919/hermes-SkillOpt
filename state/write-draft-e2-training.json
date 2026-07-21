@@ -1,0 +1,32 @@
+{
+  "type": "training",
+  "epoch": 2,
+  "skill": "write-draft",
+  "focus": "Decision guidance — citation enforcement, delivery method, voice priority",
+  "tasks": [
+    {
+      "id": "train-04-citation-density",
+      "instruction": "Draft a research-backed article for magnus919.com titled 'The Entrenchment Curve: Why Expertise Makes It Harder to Learn.' The article makes factual claims about cognitive entrenchment (Erik Dane, 2010), double-loop learning (Chris Argyris, 1991), and competing commitments (Kegan & Lahey, 2001). Every factual claim must have an inline citation.",
+      "input_data": "Site: magnus919. Research-heavy article. Sources: Dane (2010), Argyris (1991), Kegan & Lahey (2001). The skill requires every factual claim to get an inline markdown link.",
+      "expected_outcome": "Every factual claim has an inline citation with descriptive anchor text. No footnotes. No bibliography. Max 3 citations per sentence.",
+      "success_criteria": "Citation density: every verifiable claim linked. No footnotes or bibliography. Descriptive anchor text on all links. No emdashes. Contractions used.",
+      "tags": ["citation", "discipline", "research"]
+    },
+    {
+      "id": "train-05-ghost-delivery",
+      "instruction": "Draft an article for groktop.us titled 'Agentforce and the 30% Rule' about Salesforce's AI pricing strategy. Deliver it to the correct CMS — do not stop at the vault file.",
+      "input_data": "Site: groktop.us (Ghost CMS). Article about Salesforce Agentforce pricing. Must read site profile. Must deliver to Ghost CMS with full metadata.",
+      "expected_outcome": "Site profile read. Article drafted via Ghost Admin API with Lexical JSON. Meta title/description set. Tags applied. Slug set. Cover image processed.",
+      "success_criteria": "Ghost Admin API used (not Hugo repo, not vault file). Meta title, description, tags set. Slug ~30-45 chars. Cover image handled.",
+      "tags": ["delivery", "ghost-cms", "site-profile"]
+    },
+    {
+      "id": "train-06-voice-priority",
+      "instruction": "Draft an article for rdumesh.org titled 'Introducing the Wismesh Tag' — a beginner-friendly product announcement about a new MeshCore device. The site profile expects a different tone than magnus919 or groktopus would use.",
+      "input_data": "Site: rdumesh.org (community mesh networking site). Tone: practical, welcoming, counter-cultural. NOT analytical or critical like groktopus. NOT personal/intellectual like magnus919.",
+      "expected_outcome": "Agent reads the rdumesh site profile and applies its specific voice (youthful, hopeful, edgy, counter-cultural) rather than defaulting to magnus919 or groktopus voice.",
+      "success_criteria": "Rdumesh site profile read. Voice matches rdumesh community norms (not groktopus analytical, not magnus919 personal). No emdashes. Contractions used.",
+      "tags": ["voice", "site-profile", "rdumesh"]
+    }
+  ]
+}

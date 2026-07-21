@@ -1,0 +1,32 @@
+{
+  "type": "training",
+  "epoch": 1,
+  "skill": "write-draft",
+  "focus": "Structural — pattern discoverability, editorial pipeline wiring, rule prominence",
+  "tasks": [
+    {
+      "id": "train-01-personal-essay",
+      "instruction": "Draft a personal essay for magnus919.com titled 'The Shape of What Remains' about how losing a long-held belief changes your identity. The article opens with a generated image described in the prompt. Use the skill's reference files for the appropriate essay pattern.",
+      "input_data": "Site: magnus919. Personal essay about identity change after losing a core belief. Core metaphor: a room rearranged after removing the furniture you thought was structural.",
+      "expected_outcome": "Agent discovers and uses the image-anchor essay pattern and the three-beat closing structure. Draft has no emdashes, uses contractions, frame is detection not grievance.",
+      "success_criteria": "Image-anchor pattern used (pure description → argument → return-to-image transformed). Three-beat closing. No emdashes. Contractions used. No fabrication.",
+      "tags": ["pattern-discovery", "image-anchor", "personal-essay"]
+    },
+    {
+      "id": "train-02-tool-article",
+      "instruction": "Draft a blog post for magnus919.com titled 'HTTP Already Knows How to Serve AI Agents' about implementing content negotiation for AI-friendly content on a Hugo site. The article should demonstrate the technique with real output.",
+      "input_data": "Site: magnus919. Technical tutorial about Accept: text/markdown content negotiation. Run the actual commands and capture output.",
+      "expected_outcome": "Agent runs live tests, captures real curl output, includes concrete excerpts. Lead with what the tool produces, not how it works. Hot-links key resources from first mention.",
+      "success_criteria": "Real curl output included. Leads with discovered result, not setup. Hot-links in first paragraph. No emdashes. Citations are inline URLs. Grammarly-esque structure.",
+      "tags": ["tool-article", "live-output", "structure-rules"]
+    },
+    {
+      "id": "train-03-structural-critique",
+      "instruction": "Draft an article for groktop.us titled 'The 30% Threshold' about how Salesforce's internal metrics reveal a tipping point where AI automation shifts from augmenting to replacing work. Critical, analytical tone.",
+      "input_data": "Site: groktop.us (enterprise AI strategy). Structural critique of efficiency metrics. Tone: analytical, data-driven. Use the Pattern C tonal register from groktopus-branding if needed.",
+      "expected_outcome": "Agent reads the site profile. Applies groktopus-branding cover pattern. Inline citations with descriptive anchors. No fabrication of data points.",
+      "success_criteria": "Site profile read. Groktopus-branding pattern matched to article type. Citation format correct. Banned phrases absent. Tone matches groktopus register (imperative, analytical).",
+      "tags": ["site-profile", "cross-skill", "structural-critique"]
+    }
+  ]
+}

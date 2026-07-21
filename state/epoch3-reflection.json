@@ -1,0 +1,59 @@
+{
+  "epoch": 3,
+  "version": "1.1.0",
+  "focus": "Pattern expansion — custom fonts, audio mixing, error recovery",
+  "rollout_summary": {
+    "train-07-custom-fonts": {
+      "status": "passed",
+      "key_findings": [
+        "Agent used local @font-face with downloaded .woff2 — correct approach but had to figure it out from scratch",
+        "Skill mentions font auto-resolution and the 'No deterministic font mapping' warning, but has no step-by-step custom font workflow",
+        "Agent had to learn: Google Fonts CDN URL pattern, woff2 sourcing, @font-face CSS syntax, assets/fonts/ convention",
+        "Font workflow is the single biggest undocumented edge case in the skill"
+      ]
+    },
+    "train-08-audio-mix": {
+      "status": "passed",
+      "key_findings": [
+        "Dual audio (narration + BGM) works correctly — narration at full volume, BGM reduced to 15% via ffmpeg",
+        "The skill covers BGM volume reduction in references/background-music.md but the dual-audio pattern isn't documented in the Procedure",
+        "Agent had to infer the combination pattern from separate TTS and BGM sections"
+      ]
+    },
+    "train-09-error-recovery": {
+      "status": "passed",
+      "key_findings": [
+        "Lint error `timed_element_missing_clip_class` is caught cleanly with actionable message",
+        "Skill's pitfall already documents this well — agent reported it 'directly explained why and what to do'",
+        "No structured 'lint → fix → re-lint → render' recovery workflow exists in the skill",
+        "Agents handle recovery ad-hoc rather than following a pattern"
+      ]
+    }
+  },
+  "failure_patterns": [
+    {
+      "severity": "medium",
+      "frequency": "1/3 agents (custom font task)",
+      "pattern": "Custom font workflow is completely undocumented. The skill mentions font resolution warnings but no step-by-step for sourcing .woff2, @font-face setup, or assets/fonts/ convention.",
+      "impact": "Agents waste time guessing font sourcing approaches or produce renders with wrong fonts."
+    },
+    {
+      "severity": "medium",
+      "frequency": "1/3 agents (dual audio task)",
+      "pattern": "Dual audio (narration + BGM) pattern isn't documented. The skill covers TTS and BGM separately but doesn't show how to combine them with proper volume balancing.",
+      "impact": "Agents must infer the combination pattern, risking incorrect volume levels or missing audio elements."
+    },
+    {
+      "severity": "low",
+      "frequency": "1/3 agents (error recovery task)",
+      "pattern": "No structured lint error recovery workflow exists. Agents handle errors ad-hoc.",
+      "impact": "Inefficient debugging — agents may skip the fix → re-lint → verify cycle."
+    }
+  ],
+  "epoch_1_2_effectiveness": {
+    "scaffold_hard_gate": "100% compliance (all 3 agents)",
+    "gsap_only_gate": "100% compliance (all 3 agents)",
+    "template_correction": "Not exercised (no agent needed to pick a template for these tasks)",
+    "render_config_table": "Partially exercised — audio mixing agent used --quality draft correctly"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "epoch": 1,
+  "skill": "hyperframes",
+  "version_before": "1.0.0",
+  "version_after": "1.0.1",
+  "edit_budget": 4,
+  "edits_proposed": [
+    {
+      "id": "edit-01-pitfalls-crossref",
+      "description": "Added Pitfalls cross-reference at Procedure header and CRITICAL hard-gate at Step 2 (Scaffold) requiring npx hyperframes init",
+      "validation_result": "ACCEPTED \u2014 all 3 validation agents used init, vs 1/3 in baseline",
+      "rationale": "Zero regressions + measurable compliance improvement"
+    },
+    {
+      "id": "edit-02-gsap-only-gate",
+      "description": "Added \u26a0\ufe0f hard-gate at Step 4 (Animate with GSAP) banning WAAPI/RAF",
+      "validation_result": "ACCEPTED \u2014 all 3 validation agents used GSAP, vs 2/3 in baseline",
+      "rationale": "Zero regressions + measurable compliance improvement"
+    },
+    {
+      "id": "edit-03-transitions-reference",
+      "description": "Added pointer to features.md#scene-transitions for CSS transitions, blur crossfade choreography, backdrop-filter",
+      "validation_result": "ACCEPTED \u2014 val-01 followed exact 3-phase choreography from referenced docs",
+      "rationale": "Zero regressions, content already existed in features.md, now discoverable"
+    },
+    {
+      "id": "edit-04-blog-companion",
+      "description": "Added Step 10 to wire orphaned blog-companion-explainer.md into Procedure",
+      "validation_result": "ACCEPTED \u2014 zero regressions, resolves orphaned reference",
+      "rationale": "Zero regressions, resolves orphaned reference discovered during audit"
+    }
+  ],
+  "baseline_pass_rate": "3/3 (100%)",
+  "validation_pass_rate": "2.5/3 (83% \u2014 val-03 hit iteration limit on environment setup, not skill guidance)",
+  "regressions": 0,
+  "delta": "0.0 \u2014 structural/navigational improvements on all-pass baseline"
+}

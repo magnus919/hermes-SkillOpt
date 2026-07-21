@@ -1,0 +1,32 @@
+{
+  "type": "training",
+  "epoch": 1,
+  "skill": "groktopus-branding",
+  "focus": "Structural — pattern mapping, method selection, reference discoverability",
+  "tasks": [
+    {
+      "id": "train-01-layoff-article",
+      "instruction": "Design a cover image for a groktop.us article titled 'The Human Cost of the AI Efficiency Push.' The article documents how three Fortune 500 companies laid off 40% of their mid-level engineering teams after implementing AI coding assistants, and the cascading effects on team morale, institutional knowledge, and product quality.",
+      "input_data": "Article type: workforce displacement / human cost of AI. Tone: critical, heavy. Check the skill's composition patterns and tonal register tables.",
+      "expected_outcome": "Pattern B (Burnout at Scale) selected. Heavy/oppressive tonal register. Text-to-image method (Method 3). Subject includes a diverse crowd at a vast auditorium, laptops glowing faintly.",
+      "success_criteria": "Pattern B chosen. Tonal register matches 'layoffs/displacement' from the tonal register table. Method 3 (text-to-image) chosen. Subject has concrete elements (auditorium, crowd, laptops, infinity symbols). No text in image.",
+      "tags": ["pattern-mapping", "tonal-register", "burnout"]
+    },
+    {
+      "id": "train-02-hybrid-intelligence",
+      "instruction": "Design a cover image for a groktop.us article titled 'The Hybrid Intelligence Model: How One Hospital Network Integrated AI Without Losing the Human Touch.' The article is a positive case study about a healthcare network that successfully deployed AI for diagnostic triage while keeping clinicians in the loop.",
+      "input_data": "Article type: positive transformation / human-AI collaboration. Tone: hopeful but grounded. Check the skill's composition patterns.",
+      "expected_outcome": "Pattern E (Human-AI Collaboration) selected. Hopeful-but-grounded tonal register. Text-to-image method. Subject includes a person at a desk with papers and a luminous data-form.",
+      "success_criteria": "Pattern E chosen. Tonal register matches 'transformation success'. Method 3 (text-to-image) chosen. Subject has concrete elements (person at desk, papers, luminous data-form). No text in image.",
+      "tags": ["pattern-mapping", "positive-transformation", "human-ai"]
+    },
+    {
+      "id": "train-03-ceo-critique",
+      "instruction": "Design a cover image for a groktop.us article titled 'The Cult of the Visionary CEO: Why Founder Worship Fails in the AI Era.' The article critiques how tech CEOs with cults of personality make poor strategic decisions about AI adoption because their identity is tied to being the smartest person in the room.",
+      "input_data": "Article type: founder critique. Tone: uneasy, critical. Subject: a commanding CEO figure in foreground, workers receding into mist. CRITICAL: must not be a white man in a business suit. Describe a diverse CEO figure explicitly.",
+      "expected_outcome": "Pattern C (Founder Critique) selected. Uneasy-critical tonal register. Text-to-image method. Subject explicitly described with age, race, gender, and casual attire.",
+      "success_criteria": "Pattern C chosen. Tonal register matches 'strategic critique'. Subject explicitly includes age, race, gender, attire. NOT a white man in a suit. No text in image.",
+      "tags": ["pattern-mapping", "founder-critique", "diversity"]
+    }
+  ]
+}

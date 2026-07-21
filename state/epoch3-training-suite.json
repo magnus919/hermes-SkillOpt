@@ -1,0 +1,31 @@
+{
+  "type": "training",
+  "epoch": 3,
+  "focus": "Pattern expansion — custom fonts, audio mixing, error recovery, catalog blocks",
+  "tasks": [
+    {
+      "id": "train-07-custom-fonts",
+      "instruction": "Create a 10-second 1920x1080 title card using the custom font 'Bebas Neue' (not in the auto-resolve list). Title: 'BEYOND LIMITS'. Subtitle: 'A New Standard'. Dark cinematic background.",
+      "input_data": "bg #0a0a0a, text #ffffff, accent #ff6b35. Font: Bebas Neue for title, system sans-serif for subtitle.",
+      "expected_outcome": "Agent uses @font-face to load Bebas Neue or documents the fallback workflow. Composition renders with correct typography.",
+      "success_criteria": "Font renders correctly in output. If @font-face used, file reference is valid. lint passes. render produces non-black output.",
+      "tags": ["custom-fonts", "typography", "edge-case"]
+    },
+    {
+      "id": "train-08-audio-mix",
+      "instruction": "Create a 12-second 1920x1080 composition with TTS narration AND background music. Narration script: 'Speed meets precision in the new generation.' Background: ambient lofi. The narration must be clearly audible over the music.",
+      "input_data": "bg #1a1a2e, text #e94560 accent, white body. TTS voice: af_heart.",
+      "expected_outcome": "Both audio sources present. BGM volume is reduced relative to narration (ducking applied).",
+      "success_criteria": "Two audio elements: one narration (from TTS), one BGM. BGM has lower volume than narration. lint passes. render completes. Audio streams present in output.",
+      "tags": ["audio", "tts", "bgm", "ducking", "mixing"]
+    },
+    {
+      "id": "train-09-error-recovery",
+      "instruction": "Start a new HyperFrames project, then intentionally create a composition with a known error: a clip element missing `class='clip'`. Run lint, identify the error, fix it, and produce a clean render. Document the recovery steps.",
+      "input_data": "Simple 5-second title card: 'Test Recovery' on dark bg.",
+      "expected_outcome": "Agent demonstrates the lint → fix → re-lint → render recovery workflow end-to-end.",
+      "success_criteria": "Creates composition with missing clip class. lint catches it. Fixes it. Re-lint passes. render completes. Recovery steps documented.",
+      "tags": ["error-recovery", "lint", "workflow"]
+    }
+  ]
+}

@@ -23,7 +23,7 @@ def write_json(path, data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def update_root_pyramid(state_dir, epoch):
+def update_root_pyramid(state_dir, epoch=None):
     """Scan 03-dossiers/ and rewrite root-level pyramid files (00-index, 01-summary, 02-analysis).
     Called after any phase writes new dossiers."""
     dossiers_dir = os.path.join(state_dir, "03-dossiers")

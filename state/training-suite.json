@@ -1,0 +1,30 @@
+{
+  "type": "training",
+  "skill_target": "/Users/magnus/.hermes/skills/creative/hyperframes/SKILL.md",
+  "tasks": [
+    {
+      "id": "train-01-title-card",
+      "instruction": "Create a 10-second 1920x1080 title card composition with a large title 'HyperFrames Pro', subtitle 'Video from HTML', and a faint decorative geometric element. All elements fade in sequentially. No audio. No transitions. Single scene.",
+      "input_data": "Colors: background #1a170f, text #eceae5, accent #d29d00. Font: system sans-serif.",
+      "expected_outcome": "A valid HyperFrames composition file with correct data-composition-id, paused GSAP timeline, window.__timelines registration, and non-deterministic-free animation.",
+      "success_criteria": "Lint passes. Timelines registered with paused:true. No repeat:-1. No Math.random(). Has class='clip' on timed elements. data-duration sums correctly.",
+      "tags": ["basic", "single-scene", "fade-in"]
+    },
+    {
+      "id": "train-02-multi-scene-transition",
+      "instruction": "Create a 15-second 1920x1080 composition with 2 scenes: Scene 1 (0-5s) is a title card 'Feature Launch', Scene 2 (5-15s) is a product message card. Use a blur crossfade transition between scenes. Each scene element must animate in with gsap.from(). No exit animations except on the final scene.",
+      "input_data": "Colors: bg #0a0a0a, text white, accent #3b82f6. Font: Inter.",
+      "expected_outcome": "Multi-scene composition with transition between scenes, entrance animations on all elements, no exit animations except on the final scene.",
+      "success_criteria": "Transition rule: every scene after the first has a transition. No exit animations on non-final scenes. All elements animate in via gsap.from(). Lint passes.",
+      "tags": ["multi-scene", "transitions", "entrances"]
+    },
+    {
+      "id": "train-03-vertical-sizzle",
+      "instruction": "Create a 14-second 1080x1920 vertical sizzle reel with 3 benefit cards: Card 1 (0-3.5s): 'Fast Rendering' with label '> Performance', Card 2 (3.5-7s): 'Easy Integration' with label '> Developer Experience', Card 3 (7-10.5s): Customizable output with label '> Flexibility', End CTA (10.5-14s): 'Try HyperFrames Today'. Stinger fade pattern (0.35s in / 0.2s out). Terminal dark background with amber accent.",
+      "input_data": "Canvas 1080x1920. bg #1a170f, text #eceae5, accent #d29d00. Font: monospace.",
+      "expected_outcome": "Vertical composition with stinger timing, fade helpers, proper padding (50-60px), body text at 56-64px.",
+      "success_criteria": "Canvas size 1080x1920. Each card has 3.5s duration. Fade-in 0.35s, fade-out 0.2s. No walls of text (>15 words per card). Padding 50-60px. Text sizing follows reference values.",
+      "tags": ["vertical", "stinger", "sizzle", "mobile"]
+    }
+  ]
+}

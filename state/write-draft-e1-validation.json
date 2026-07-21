@@ -1,0 +1,32 @@
+{
+  "type": "validation",
+  "epoch": 1,
+  "skill": "write-draft",
+  "focus": "Validation — pattern discoverability, cross-skill reference, banned phrase verification",
+  "tasks": [
+    {
+      "id": "val-01-epistolary-essay",
+      "instruction": "Draft an open-letter-style article for magnus919.com titled 'Dear Gravity, What The Fuck Was That?' about a gravitational wave discovery. The narrator is a transparent non-expert making sense of complex physics. Use the specialized article pattern from the skill's reference files.",
+      "input_data": "Site: magnus919. Open letter to gravity about a binary black hole merger. Core frame: honest ignorance. Check the skill's article pattern selection table for the right structure.",
+      "expected_outcome": "Agent discovers the epistolary pattern from the new table at Step 4. Combines with honest-ignorance voice rule. No emdashes. Contractions used.",
+      "success_criteria": "Epistolary pattern discovered and used. Honest-ignorance frame. No emdashes. Contractions. Inline citations with descriptive anchors. No fabrication of data.",
+      "tags": ["pattern-discovery", "epistolary", "honest-ignorance"]
+    },
+    {
+      "id": "val-02-groktopus-framework",
+      "instruction": "Draft an article for groktop.us titled 'The Build vs. Buy Decision in the AI Era' about enterprise AI procurement strategy. Read the site profile. Apply the cross-skill reference for cover pattern selection.",
+      "input_data": "Site: groktop.us. Analytical article about enterprise AI build-vs-buy decisions. Must read site profile and check the groktopus-branding cross-reference at Step 1.",
+      "expected_outcome": "Agent reads the site profile. Discovers the groktopus-branding cross-reference from Step 1. Selects the correct cover pattern. Article has analytical tone and inline citations.",
+      "success_criteria": "Site profile read. Groktopus-branding skill cross-reference discovered. Pattern A (Strategy Session) selected for strategy article. No emdashes. Contractions. Inline citations.",
+      "tags": ["site-profile", "cross-skill", "groktopus"]
+    },
+    {
+      "id": "val-03-editorial-pass",
+      "instruction": "Magnus says 'run an editorial pass' on the attached draft. The draft is at /tmp/draft-for-review.md. Apply the editorial pipeline from the skill's reference files.",
+      "input_data": "A draft exists at /tmp/draft-for-review.md (a short note about AI memory systems). Magnus said 'editorial-pass'. Check the skill's Step 10 for the editorial pipeline reference.",
+      "expected_outcome": "Agent discovers the editorial pipeline cross-reference at Step 10. Runs all five audits: fact-check → voice-check → humanize → engagement-review → copy-edit.",
+      "success_criteria": "Editorial pipeline cross-reference discovered at Step 10. All five audits applied. At least emdash check and banned-phrase grep run.",
+      "tags": ["editorial-pipeline", "verification", "cross-reference"]
+    }
+  ]
+}

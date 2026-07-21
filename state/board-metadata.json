@@ -1,0 +1,13 @@
+{
+  "target": "/Users/magnus/.hermes/skills/creative/hyperframes/SKILL.md",
+  "skill_name": "hyperframes",
+  "board_slug": "SkillOpt-hyperframes-e1",
+  "training_count": 3,
+  "validation_count": 3,
+  "edit_budget": 4,
+  "epoch": 1,
+  "created_at": "2026-05-31T04:52:34.056854",
+  "baseline_snapshot": "hyperframes-v1.0.0-baseline.md",
+  "status": "completed",
+  "completed_at": "2026-05-31T00:00:00Z"
+}

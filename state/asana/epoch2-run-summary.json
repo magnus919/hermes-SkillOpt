@@ -1,0 +1,24 @@
+{
+    "epoch": 2,
+    "skill_name": "asana",
+    "baseline_version": "0.2.0",
+    "target_version": "0.3.0",
+    "completed_at": "2026-06-29T10:40:00Z",
+    "edit_budget": 4,
+    "edits_accepted": 4,
+    "edits_rejected": 0,
+    "validation_summary": {
+        "baseline_pass_rate": "25% (1/4 — tasks create flags found in Procedure section)",
+        "post_edit_pass_rate": "100% (all flags now in Quick Reference)",
+        "delta": "+75% flag coverage in Quick Reference"
+    },
+    "edits": [
+        {"id": "edit-1", "type": "add", "location": "QR", "what": "memberships create block", "verdict": "accepted"},
+        {"id": "edit-2", "type": "enrich", "location": "QR", "what": "projects list/create with --team --archived --notes --due-on --color --owner", "verdict": "accepted"},
+        {"id": "edit-3", "type": "enrich", "location": "QR", "what": "tasks create with --notes --assignee --due-on --start-on --parent --followers --section", "verdict": "accepted"},
+        {"id": "edit-4", "type": "enrich", "location": "QR", "what": "tasks update with --approval-status --notes --assignee --due-on --start-on + users list --team", "verdict": "accepted"}
+    ],
+    "tool_bugs_discovered": [
+        "portfolios list missing --owner flag — fixed by validation subagent"
+    ]
+}

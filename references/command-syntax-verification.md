@@ -11,8 +11,15 @@ Commands that look syntactically correct when read in text may not work when exe
 - A subcommand may not exist at the level you expect (`browser snapshot` when `snapshot` is an action of `exec`, not a subcommand of `browser`)
 - A flag may have been renamed or removed in a newer CLI version
 - A positional argument order may be different from what the help text implies
+- **The command may not exist at all at the CLI layer** — a server-side-only feature documented as if it had a CLI wrapper (`monitor` was a REST API endpoint with zero CLI support, but the skill documented a `groktocrawl monitor` subcommand that didn't exist)
 
 The validation task suite does not automatically test command syntax in prose examples — it tests task outcomes. A task that scores "success" on a scrape test does not validate that a browser command block in the pitfall section is syntactically correct.
+
+## Root Cause: Interface Layer Assumption
+
+The "non-existent CLI command" failure mode has a specific root cause: **assuming a server-side API feature is exposed in the CLI without verifying.** When you know a feature exists at the API layer (because you've read the server code or API docs), it's easy to assume a CLI wrapper exists too. This assumption is especially dangerous during documentation edits — the feature *exists*, just not at the interface layer you're documenting for.
+
+**Prevention:** Before writing CLI usage examples, inspect the installed interface and run a safe real invocation. Use `<tool> --help` when that interface supports it, but do not treat an unsupported help flag as proof that the command itself is invalid: BSD utilities can have different help conventions. When help is unavailable, consult the local manual or run a bounded, disposable execution that proves the documented syntax. The server API and CLI are separate code paths — one does not imply the other.
 
 ## Worked Example: GroktoCrawl Epoch 2 → Epoch 3
 

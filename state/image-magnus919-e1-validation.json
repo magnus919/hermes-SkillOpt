@@ -1,0 +1,32 @@
+{
+  "type": "validation",
+  "epoch": 1,
+  "skill": "image-magnus919",
+  "focus": "Validation — independent tasks testing same structural dimensions",
+  "tasks": [
+    {
+      "id": "val-01-different-concept",
+      "instruction": "Generate a magnus919.com hero image for an article titled 'When Networks Dream: The Latent Topology of Mesh Radio.' The article explores how MeshCore networks develop emergent routing patterns that no single node designed. No reference image.",
+      "input_data": "Article about MeshCore mesh networking emergent behavior. Core metaphor: a network dreaming itself into a new shape. No reference exists.",
+      "expected_outcome": "Hero image via Path A. Gonzo template used unchanged. SUBJECT line captures the friction point of emergent order.",
+      "success_criteria": "Template verbatim. SUBJECT one line, concrete, at a friction point. Image saved as 1600px JPEG Q85.",
+      "tags": ["path-a", "template-fidelity"]
+    },
+    {
+      "id": "val-02-another-reference",
+      "instruction": "For an article about 'The Analog Soul of Digital Things', convert a photo of an old rotary telephone sitting on a stack of server rack manuals. The reference is at /Users/magnus/.hermes/skills/image-magnus919/assets/portia-full-face-reference.png",
+      "input_data": "Reference exists. Article about analog-digital collision. Use Path B (edits API).",
+      "expected_outcome": "Edits API with landscape size. Correct key extraction. JPEG Q85 output.",
+      "success_criteria": "Path B. Size=1792x1024. Key via Python grep. 1600px JPEG Q85 output.",
+      "tags": ["path-b", "edits-api"]
+    },
+    {
+      "id": "val-03-nonstandard-format",
+      "instruction": "An existing blog post at content/posts/2025/something/index.md already has a cover.webp file. Generate a new gonzo cover for an updated version of this post about 'The Persistence of Memory in AI Systems'. Save as cover.jpg, remove old cover.webp, update frontmatter.",
+      "input_data": "Existing post has cover.webp. Article: AI memory persistence. No reference image.",
+      "expected_outcome": "New gonzo image generated via Path A. Old cover.webm removed. Frontmatter updated to reference cover.jpg.",
+      "success_criteria": "Old cover file renamed/removed. Frontmatter updated. New image at 1600px JPEG Q85.",
+      "tags": ["path-a", "nonstandard-format", "frontmatter"]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "type": "training",
+  "epoch": 2,
+  "skill_target": "/Users/magnus/.hermes/skills/creative/hyperframes/SKILL.md",
+  "focus": "Decision guidance \u2014 template selection, CSS vs shader transitions, render config",
+  "tasks": [
+    {
+      "id": "train-04-data-chart",
+      "instruction": "Create a 15-second 1920x1080 data visualization video showing quarterly revenue growth across 4 quarters. Animated bar chart with labels and a title card.",
+      "input_data": "Q1: $1.2M, Q2: $1.8M, Q3: $2.5M, Q4: $3.9M. Colors: dark bg (#0f0f23), amber accent (#ffb347), white text.",
+      "expected_outcome": "Agent selects an appropriate template for animated data (e.g., swiss-grid or decision-tree), builds chart bars with GSAP stagger, runs full pipeline.",
+      "success_criteria": "Template is appropriate for data visualization. GSAP stagger used for bar entrance. lint passes. render produces a non-black video.",
+      "tags": [
+        "template-choice",
+        "data-viz",
+        "stagger"
+      ]
+    },
+    {
+      "id": "train-05-sports-promo",
+      "instruction": "Create a 20-second 1920x1080 high-energy sports promo video for 'Apex Athletics'. Needs dramatic transitions between 3 segments: intro (0-5s), athlete showcase (5-12s), CTA (12-20s).",
+      "input_data": "brand colors: black bg (#000), red accent (#e63946), white text (#fff). Font: Impact/Arial bold.",
+      "expected_outcome": "Agent selects shader transitions (appropriate for 'high' energy) and uses high-energy entrance animations. Render output has visible transitions between scenes.",
+      "success_criteria": "Transition type matches skill's mood/energy table (high = shader: ridged burn, glitch, chromatic split). 3 scenes with entrance animations. No exit animations except final scene. lint passes.",
+      "tags": [
+        "shader-vs-css",
+        "high-energy",
+        "multi-scene",
+        "transitions"
+      ]
+    },
+    {
+      "id": "train-06-prod-render",
+      "instruction": "Create a 25-second 1920x1080 brand video for 'Montcastle Tech'. This is a client deliverable that needs to be byte-identical across re-renders. Single scene with animated logo + 3 product feature cards.",
+      "input_data": "Brand: dark navy/teal (#0d1b2a/#1b4965), white text. Font: Inter.",
+      "expected_outcome": "Agent produces the composition and renders with --docker flag for reproducibility, --quality high for final delivery.",
+      "success_criteria": "--docker flag used in render command for reproducibility. --quality high or --output set. lint passes. Duration matches spec. Docker render completes.",
+      "tags": [
+        "render-config",
+        "docker",
+        "quality"
+      ]
+    }
+  ]
+}

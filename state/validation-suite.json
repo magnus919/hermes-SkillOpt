@@ -1,0 +1,30 @@
+{
+  "type": "validation",
+  "skill_target": "/Users/magnus/.hermes/skills/creative/hyperframes/SKILL.md",
+  "tasks": [
+    {
+      "id": "val-01-bgm-promo",
+      "instruction": "Create a 12-second 1920x1080 product promo with 3 sections: Title card 'Groktopus AI' (0-4s), feature showcase 'Real-time Analytics' (4-8s), CTA 'Get Started Today' (8-12s). Add a crossfade transition between each section. Include background music via a separate <audio> element with id and src attributes.",
+      "input_data": "bg #132345, text #e8d9c0, accent #65413a. Font: serif.",
+      "expected_outcome": "Multi-scene composition with audio element, transitions, and BGM rules followed.",
+      "success_criteria": "Audio element has id= and src= attributes. data-track-index set. Transition between all scenes. All elements use gsap.from(). lint --strict passes.",
+      "tags": ["audio", "bgm", "multi-scene", "product-promo"]
+    },
+    {
+      "id": "val-02-process-flow",
+      "instruction": "Create a 10-second 1920x1080 composition showing 3 items (cards) moving through a pipeline: Stage 1 → Stage 2 → Stage 3. Each card must physically change position on screen (translate via x/y) to represent progression. Single scene, no transitions needed. Label each stage.",
+      "input_data": "bg white, text #333, accent #2563eb. Font: sans-serif. 3 cards represented as colored divs.",
+      "expected_outcome": "Process-flow animation where cards move between positions, not just change labels in place.",
+      "success_criteria": "gsap.to() moves cards via x/y/left transforms. Cards change screen position. Labels stay readable. No text-only animations where only labels change but cards stay put. lint passes.",
+      "tags": ["process-flow", "animation", "position-change"]
+    },
+    {
+      "id": "val-03-tts-captions",
+      "instruction": "Create a 15-second 1920x1080 explainer with TTS narration and word-level captions. Script: 'This product makes data visualization simple and accessible for everyone.' Use the TTS workflow described in the skill. Add decorative background geometry (circles, lines) that's visual but non-distracting. Caption style: tutorial (clean sans, 48-64px, high contrast).",
+      "input_data": "bg #1a1a2e, text #eee, accent #e94560. Font: system sans-serif.",
+      "expected_outcome": "TTS file generated, word-level transcript produced, captions in tutorial style with proper positioning and exit guarantees.",
+      "success_criteria": "TTS command used with voice from skill's guidance. Caption groups have entry AND exit (hard kill tl.set with visibility:hidden). Caption positioning follows skill rules. lint passes.",
+      "tags": ["tts", "captions", "audio", "decorative"]
+    }
+  ]
+}
