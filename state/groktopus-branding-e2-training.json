@@ -1,0 +1,32 @@
+{
+  "type": "training",
+  "epoch": 2,
+  "skill": "groktopus-branding",
+  "focus": "Decision guidance — tool selection, diversity differentiation, pattern fine-print",
+  "tasks": [
+    {
+      "id": "train-04-inline-vs-cover",
+      "instruction": "An article on groktop.us needs BOTH a cover image and an inline process diagram showing the four stages of AI adoption maturity. Design both assets using the correct methods from the skill.",
+      "input_data": "Article: 'The Four Stages of AI Adoption' — covers assessment, pilot, scaling, embed. Needs: 1) cover image, 2) inline process-cycle diagram showing the four stages. Use the groktopus-branding skill's methods correctly.",
+      "expected_outcome": "Cover generated via Method 3 (text-to-image). Inline diagram generated via the Inline Illustrations section (process/cycle template). Different methods for different purposes.",
+      "success_criteria": "Cover uses Method 3 (text-to-image, Pattern A for strategy). Diagram uses the process-cycle inline template (cross-hatched, parchment bg, navy dotted arrows). No text in cover. Diagram has proper labels in Bodoni-style serif.",
+      "tags": ["multi-asset", "method-selection", "inline-illustration"]
+    },
+    {
+      "id": "train-05-diversity-differentiation",
+      "instruction": "Design a Pattern D (Weight of a Decision) cover for a groktop.us post-mortem article. The existing groktopus-branding assets already include a Pattern D cover (Cover 004) featuring a Black woman in an empty boardroom. Choose a DIFFERENT demographic for this new cover to expand the brand's visual diversity.",
+      "input_data": "Article: 'The Server That Couldn't Forget' — post-mortem of a data migration failure. Pattern D. Existing Cover 004: Black woman, 40s, empty boardroom. Choose a different demographic.",
+      "expected_outcome": "Pattern D selected, but with a subject from a different demographic group than Cover 004. Rationale explains why this expands brand diversity.",
+      "success_criteria": "Pattern D. Subject is NOT a Black woman in 40s (different from Cover 004). Age/race/gender/attire explicitly specified. Rationale mentions expanding visual diversity.",
+      "tags": ["diversity", "pattern-d", "differentiation"]
+    },
+    {
+      "id": "train-06-ambiguous-pattern",
+      "instruction": "Design a cover for 'The Efficiency Paradox: When Optimization Destroys What It Measures.' The article argues that AI efficiency metrics (code completion rates, ticket resolution times) incentivize behaviors that degrade long-term quality. It touches on both workforce burnout (Pattern B territory) and structural/critical analysis (Pattern C territory). Choose the best pattern based on the article's PRIMARY thesis.",
+      "input_data": "Article about AI efficiency metrics creating perverse incentives. Has elements of both workforce impact and structural critique. PRIMARY thesis: structural critique of measurement culture.",
+      "expected_outcome": "Agent maps the article's PRIMARY thesis (structural critique) to Pattern C, not just the secondary theme (burnout) to Pattern B. Reports the decision reasoning.",
+      "success_criteria": "Pattern C chosen (not B). Tonal register: strategic critique (Goya). Rationale explains why structural critique outweighs the burnout angle.",
+      "tags": ["ambiguous", "pattern-selection", "thesis-mapping"]
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+    "skill_name": "asana",
+    "baseline_version": "0.1.0",
+    "target_version": "0.2.0",
+    "epoch": 1,
+    "completed_at": "2026-06-29T10:06:00Z",
+    "edit_budget": 4,
+    "edits_accepted": 4,
+    "edits_rejected": 0,
+    "validation_summary": {
+        "baseline_pass_rate": "0% (0/4 validation tasks passed)",
+        "post_edit_pass_rate": "100% (4/4 validation tasks passed on documentation coverage)",
+        "delta": "+100% documentation coverage"
+    },
+    "edits": [
+        {
+            "id": "edit-1",
+            "type": "add",
+            "location": "Quick Reference, after portfolios block",
+            "what": "Added goals block with 6 subcommands (list, get, create, update, delete, set-metric)",
+            "rationale": "Entire resource block was missing from skill despite CLI support",
+            "verdict": "accepted"
+        },
+        {
+            "id": "edit-2",
+            "type": "add",
+            "location": "Quick Reference, after tags block",
+            "what": "Added custom-fields and attachments resource blocks (6 subcommands total)",
+            "rationale": "Both resources mentioned in description but had zero CLI commands documented",
+            "verdict": "accepted"
+        },
+        {
+            "id": "edit-3",
+            "type": "replace",
+            "location": "Quick Reference, teams and portfolios blocks",
+            "what": "Fixed teams list and portfolios list to document required flags",
+            "rationale": "Both flags are argparse-required but were undocumented, causing command failures",
+            "verdict": "accepted"
+        },
+        {
+            "id": "edit-4",
+            "type": "add",
+            "location": "Quick Reference, tasks, sections, and tags blocks",
+            "what": "Added 8 missing subcommands across 3 resource blocks",
+            "rationale": "CLI supports these but skill only documented partial subcommands",
+            "verdict": "accepted"
+        }
+    ],
+    "tool_bugs_discovered": [
+        "CLI custom-fields list uses wrong API route: GET /custom_fields?workspace=... should be GET /workspaces/{gid}/custom_fields. Fix in cmd_custom_fields at line 373."
+    ],
+    "findings": [
+        "goals list API returned 402 - workspace needs premium Asana tier. Skill docs correct.",
+        "custom-fields list 404 is CLI tool bug, not skill documentation error."
+    ]
+}

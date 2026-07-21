@@ -1,0 +1,32 @@
+{
+  "type": "validation",
+  "epoch": 1,
+  "skill": "groktopus-branding",
+  "focus": "Validation — independent tasks testing same structural dimensions",
+  "tasks": [
+    {
+      "id": "val-01-strategy-framework",
+      "instruction": "Design a cover image for a groktop.us article titled 'The 30% Threshold: Why Salesforce's AI Work Ratio Changes Everything.' The article analyzes how Salesforce's internal AI adoption metrics reveal a tipping point where automation shifts from augmenting to replacing workflows. Tone: analytical, structural.",
+      "input_data": "Article type: AI strategy / framework analysis. Critical but analytical tone.",
+      "expected_outcome": "Pattern A (Strategy Session) or Pattern D (Weight of Decision) selected. Tonal register matches corporate analysis (Doré). Method 3 (text-to-image). Subject has professionals around a table or a single figure in an empty space.",
+      "success_criteria": "Pattern selection matches article type. Tonal register correctly referenced. Method 3 chosen. Subject diversity explicitly specified.",
+      "tags": ["pattern-mapping", "strategy", "analytical"]
+    },
+    {
+      "id": "val-02-decision-postmortem",
+      "instruction": "Design a cover image for a groktop.us article titled 'What We Lost in the Migration: A Post-Mortem of a Failed AI Platform Transition.' The article reflects on an enterprise AI platform migration that went wrong — technical debt, vendor lock-in, and the human cost of a bad architectural decision. Tone: reflective, melancholic.",
+      "input_data": "Article type: post-mortem / reflection. Tone: melancholic, contemplative.",
+      "expected_outcome": "Pattern D (Weight of a Decision) selected. Tonal register matches 'post-mortems, reflection pieces' from the register table. Single figure in empty space. Method 3.",
+      "success_criteria": "Pattern D chosen. Register matches 'The Weight of a Decision' (Piranesi-like vast interior, single figure). Method 3. Diversity specified.",
+      "tags": ["pattern-mapping", "post-mortem", "reflection"]
+    },
+    {
+      "id": "val-03-cover-migration",
+      "instruction": "An existing groktop.us article has a cover image from the old painterly watercolor era. You need to migrate it to the new vintage steel engraving brand style. The old cover image is at /Volumes/tank01/magnus/Downloads/groktopus-old-cover.png — it shows a conference room scene with diverse professionals around a table.",
+      "input_data": "Existing cover exists. Brand migration task. Old style: painterly watercolor. Target style: vintage steel engraving.",
+      "expected_outcome": "Method 6 (Cover Image Migration via edit API) selected. Reference is the old cover image. Prompt describes what to keep (composition, subjects) and what to change (rendering style, palette, technique).",
+      "success_criteria": "Method 6 chosen — not Method 3 (this is a migration, not a new scene). Edit API workflow used. Prompt includes 'Redraw this image as a vintage steel engraving' pattern. --aspect landscape specified.",
+      "tags": ["method-selection", "migration", "edit-api"]
+    }
+  ]
+}

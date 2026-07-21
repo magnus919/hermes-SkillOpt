@@ -1,0 +1,44 @@
+{
+    "type": "training",
+    "skill_target": "/Users/magnus/.hermes/skills/productivity/pdf-generation/SKILL.md",
+    "metric_weights": {
+        "pass_rate": 0.35,
+        "quality_score": 0.35,
+        "speed_score": 0.15,
+        "token_efficiency": 0.15
+    },
+    "training": [
+        {
+            "id": "train-profile-routing",
+            "instruction": "Generate a PDF report about system architecture using the pdf-generation skill. The drafting step must be done by a writer profile, the rendering step by a renderer profile, with a structured markdown handoff between them. Use the kanban board to track the handoff.",
+            "success_criteria": "PDF is generated successfully. Two different profiles were involved. The handoff artifact was used between them.",
+            "tags": ["profiles", "kanban", "workflow"]
+        },
+        {
+            "id": "train-qa-rejection-loop",
+            "instruction": "Generate a PDF from markdown that contains at least one flowchart LR Mermaid diagram. The PDF must go through a QA gate that catches the LR orientation and routes the task back to the rendering step with a fix instruction to convert it to TD. Verify the fix is applied in the second pass.",
+            "success_criteria": "QA gate catches the LR flowchart. Task is re-routed to rendering. Fix is applied. Final PDF has only TD flowcharts.",
+            "tags": ["qa-gate", "rework", "orientation"]
+        },
+        {
+            "id": "train-multi-cycle-rework",
+            "instruction": "Generate a PDF from markdown that contains three defects: (1) a flowchart LR, (2) ASCII box-drawing art, (3) body font size under 10pt. Run the QA gate which must catch all three, one per cycle. After each rejection, fix exactly one defect and re-submit. Track the fix history on the kanban card.",
+            "success_criteria": "All three defects are caught sequentially. Each cycle fixes exactly one. Kanban card accumulates fix history. Final PDF passes all checks.",
+            "tags": ["qa-gate", "multi-cycle", "fix-history"]
+        }
+    ],
+    "validation": [
+        {
+            "id": "val-full-workflow-stress",
+            "instruction": "Run the complete pdf-generation workflow: writer profile drafts a 3-page architecture report markdown → renderer profile generates PDF using the skill → QA gate inspects the output → if any defects found (LR flowcharts, ASCII art, orphaned lines, tiny fonts, inline width styles), route back to rendering → repeat until QA passes → deliver. The workflow must handle at least one rejection loop correctly.",
+            "success_criteria": "Full workflow completes. At least one QA rejection loop occurs and is resolved. Final PDF has zero defects per the QA checklist. Kanban card shows the full transition history.",
+            "tags": ["workflow", "qa-gate", "rework", "end-to-end"]
+        },
+        {
+            "id": "val-empty-rework",
+            "instruction": "Generate a PDF from clean markdown (no LR flowcharts, no ASCII art, proper CSS sizing, appropriate font sizes). Run the QA gate. It should pass on the first try with no rework loop.",
+            "success_criteria": "QA passes on first attempt. No rework loop triggered. Kanban transitions are clean: render → QA pass → deliver.",
+            "tags": ["qa-gate", "no-rework", "happy-path"]
+        }
+    ]
+}

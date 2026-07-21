@@ -1,0 +1,83 @@
+{
+  "epoch": 1,
+  "skill": "hyperframes",
+  "timestamp": "2026-05-31T00:00:00Z",
+  "training_tasks": ["train-01-title-card", "train-02-multi-scene", "train-03-vertical-sizzle"],
+  "rollout_summary": {
+    "train-01-title-card": {
+      "status": "passed",
+      "tool_followed": true,
+      "scaffold_used": true,
+      "gsap_used": true,
+      "lint_validate_inspect_used": true,
+      "render_used": true,
+      "key_findings": [
+        "Followed hyperframes pipeline correctly: init → compose → lint → validate → inspect → render",
+        "Identified ambiguity: 'content containers use padding' doesn't define what counts as content vs decorative",
+        "Identified gap: font handling not documented (auto-resolution, @font-face requirements)",
+        "Identified gotcha: gsap.from({opacity:0}) + CSS opacity:0 collides — element stays hidden"
+      ]
+    },
+    "train-02-multi-scene": {
+      "status": "passed",
+      "tool_followed": false,
+      "scaffold_used": false,
+      "gsap_used": true,
+      "lint_validate_inspect_used": false,
+      "render_used": false,
+      "key_findings": [
+        "Wrote standalone HTML — did NOT use npx hyperframes init",
+        "Used GSAP timeline correctly (paused, registered)",
+        "Identified gap: transition guidance mentions 'opacity, transforms, clip-path' but misses backdrop-filter for blur effects",
+        "Identified gap: no crossfade choreography guidance (blur in → crossfade → blur out timing)"
+      ]
+    },
+    "train-03-vertical-sizzle": {
+      "status": "passed",
+      "tool_followed": false,
+      "scaffold_used": false,
+      "gsap_used": false,
+      "lint_validate_inspect_used": false,
+      "render_used": false,
+      "key_findings": [
+        "Wrote standalone HTML — did NOT use npx hyperframes init",
+        "Used Web Animations API (WAAPI) instead of GSAP as specified in the skill",
+        "Did not run lint/validate/inspect/doctor",
+        "Identified gap: CTA word count not explicitly defined in vertical stinger rules",
+        "Identified gap: persistent decorative/CTA elements vs per-clip elements not clarified"
+      ]
+    }
+  },
+  "failure_patterns": [
+    {
+      "severity": "high",
+      "frequency": "2/3 agents",
+      "pattern": "Agents skip the scaffold-lint-validate-render pipeline for non-trivial compositions. The procedure steps (init → compose → lint → validate → inspect → render) are buried under 15+ KB of rule documentation.",
+      "impact": "Produces browser-testable HTML but not HyperFrames-native compositions. Cannot render to video, cannot lint for structural errors, cannot use the HyperFrames CLI toolchain."
+    },
+    {
+      "severity": "high",
+      "frequency": "1/3 agents",
+      "pattern": "Agent reached for Web Animations API instead of GSAP, despite GSAP being the specified animation engine in the skill.",
+      "impact": "Skips the GSAP-specific features (easing variety, timeline nesting, stagger control) that the skill explicitly requires."
+    },
+    {
+      "severity": "medium",
+      "frequency": "2/3 agents",
+      "pattern": "Transition implementation guidance lacks concrete CSS techniques (backdrop-filter for blur crossfades) and choreography timing.",
+      "impact": "Agents must invent the transition implementation from first principles rather than following established patterns."
+    },
+    {
+      "severity": "medium",
+      "frequency": "1/3 agents",
+      "pattern": "'Content containers use padding not absolute positioning' is ambiguous about what qualifies as 'content' vs 'decorative'.",
+      "impact": "Agents make different assumptions about when to use absolute positioning."
+    },
+    {
+      "severity": "low",
+      "frequency": "1/3 agents",
+      "pattern": "gsap.from({opacity:0}) + CSS opacity:0 collision is a real gotcha not documented in pitfalls.",
+      "impact": "Elements remain invisible when CSS sets opacity:0 and gsap.from() also targets opacity:0."
+    }
+  ]
+}

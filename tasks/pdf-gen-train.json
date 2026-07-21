@@ -1,0 +1,32 @@
+[
+  {
+    "id": "train-profile-routing",
+    "instruction": "Generate a PDF report about system architecture using the pdf-generation skill. The drafting step must be done by a writer profile, the rendering step by a renderer profile, with a structured markdown handoff between them. Use the kanban board to track the handoff.",
+    "success_criteria": "PDF is generated successfully. Two different profiles were involved. The handoff artifact was used between them.",
+    "tags": [
+      "profiles",
+      "kanban",
+      "workflow"
+    ]
+  },
+  {
+    "id": "train-qa-rejection-loop",
+    "instruction": "Generate a PDF from markdown that contains at least one flowchart LR Mermaid diagram. The PDF must go through a QA gate that catches the LR orientation and routes the task back to the rendering step with a fix instruction to convert it to TD. Verify the fix is applied in the second pass.",
+    "success_criteria": "QA gate catches the LR flowchart. Task is re-routed to rendering. Fix is applied. Final PDF has only TD flowcharts.",
+    "tags": [
+      "qa-gate",
+      "rework",
+      "orientation"
+    ]
+  },
+  {
+    "id": "train-multi-cycle-rework",
+    "instruction": "Generate a PDF from markdown that contains three defects: (1) a flowchart LR, (2) ASCII box-drawing art, (3) body font size under 10pt. Run the QA gate which must catch all three, one per cycle. After each rejection, fix exactly one defect and re-submit. Track the fix history on the kanban card.",
+    "success_criteria": "All three defects are caught sequentially. Each cycle fixes exactly one. Kanban card accumulates fix history. Final PDF passes all checks.",
+    "tags": [
+      "qa-gate",
+      "multi-cycle",
+      "fix-history"
+    ]
+  }
+]

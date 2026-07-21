@@ -1,0 +1,32 @@
+{
+  "type": "training",
+  "epoch": 1,
+  "skill": "image-magnus919",
+  "focus": "Structural cleanup — path selection, template fidelity, output processing, error handling",
+  "tasks": [
+    {
+      "id": "train-01-pure-concept",
+      "instruction": "Generate a magnus919.com hero image for an article titled 'The Substrate Architect: When the Infrastructure Shapes the Mind.' The article is about how the design of AI memory systems constrains what kind of thinking the agent can do. No reference image available — pure conceptual generation.",
+      "input_data": "Article: AI memory substrates. Core metaphor: infrastructure shapes cognition. No reference image exists.",
+      "expected_outcome": "Hero image generated via Path A (image_generate), using the locked gonzo template unchanged, with a concrete SUBJECT line.",
+      "success_criteria": "Gonzo template used verbatim (no modifications). SUBJECT line is one line, concrete, sits at a friction point. Image saved as 1600px JPEG Q85. Old/intermediate files cleaned up.",
+      "tags": ["path-a", "template-fidelity"]
+    },
+    {
+      "id": "train-02-reference-conversion",
+      "instruction": "A reader submitted a sketch of their ideal AI workspace. Convert this reference photo to gonzo style for a magnus919.com article titled 'Where Ideas Go to Die: The Physics of the Messy Desk.' The reference image is at /Users/magnus/.hermes/skills/image-magnus919/assets/portia-full-face-reference.png",
+      "input_data": "Reference path: /Users/magnus/.hermes/skills/image-magnus919/assets/portia-full-face-reference.png. Article about creative workspace dynamics. Use Path B (edits API).",
+      "expected_outcome": "Edits API called with landscape size (1792x1024). OpenAI key extracted from .env correctly. Output processed to 1600px JPEG Q85.",
+      "success_criteria": "Path B chosen. Size=1792x1024. Key extracted via Python grep (not source ~/.hermes/.env). Cropped to 1024x1024 square first. Output converted to 1600px JPEG Q85.",
+      "tags": ["path-b", "edits-api", "landscape"]
+    },
+    {
+      "id": "train-03-safety-workaround",
+      "instruction": "Generate a gonzo cover for an article about 'The Secret History of Web Design' which prominently features Jony Ive's design philosophy. Apply the skill's safety system workaround pattern.",
+      "input_data": "Article about Jony Ive and Apple design at Apple Park. The name 'Jony Ive' may trigger OpenAI content safety. Reference: skill has 'edits-api-quirks.md' covering rephrase-describe-not-name pattern.",
+      "expected_outcome": "Agent constructs the prompt using the workaround pattern (describe the scene, don't name the subject) proactively before calling image_generate.",
+      "success_criteria": "Prompt describes scene without naming Jony Ive. Uses adjectives/descriptors instead ('sleek minimal forms, unadorned white surfaces'). If first call fails, retries with despcription-only approach.",
+      "tags": ["safety-workaround", "path-a", "rephrase"]
+    }
+  ]
+}

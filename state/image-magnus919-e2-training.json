@@ -1,0 +1,32 @@
+{
+  "type": "training",
+  "epoch": 2,
+  "skill": "image-magnus919",
+  "focus": "Decision guidance — path selection, subject derivation, cover format handling",
+  "tasks": [
+    {
+      "id": "train-04-subject-derivation",
+      "instruction": "Generate a gonzo cover for an article with this abstract: 'Large language models don't reason the way we think they do. They pattern-match across a latent space of training data, assembling responses from statistical proximity rather than logical necessity. This isn't a bug — it's a fundamentally different kind of cognition, one we keep misrecognizing because we evaluate it against human benchmarks.' No reference image available.",
+      "input_data": "Core thesis: LLM cognition is pattern-matching, not reasoning. We misrecognize it because we use the wrong benchmarks. No reference.",
+      "expected_outcome": "A SUBJECT line that captures the friction point of pattern-matching cognition being mistaken for reasoning. Concrete, friction point present, no style words.",
+      "success_criteria": "SUBJECT captures the 'misrecognition' friction. Concrete objects (books, maps, patterns, mirrors). No style words. Template verbatim. 1600px JPEG Q85.",
+      "tags": ["subject-derivation", "path-a", "conceptual"]
+    },
+    {
+      "id": "train-05-ambiguous-path",
+      "instruction": "You need a gonzo cover for an article titled 'The Quiet Collapse of Attention.' The article is about how modern digital interfaces fragment attention into micro-slices. A reader submitted a photo of their cat sitting on a keyboard as a reference image. The reference has no thematic connection to the article's subject.",
+      "input_data": "Reference image exists at assets/portia-full-face-reference.png but it's a spider face, not related to the article. Article is about attention fragmentation in digital interfaces.",
+      "expected_outcome": "Agent recognizes the reference image is thematically irrelevant and chooses Path A (text-to-image from scratch) rather than forcing an irrelevant reference into Path B.",
+      "success_criteria": "Path A chosen. SUBJECT captures attention fragmentation (screens, threads, mirrors, overlapping timelines, fractured light). Reference image NOT used despite existing. Template verbatim.",
+      "tags": ["path-selection", "decision", "ambiguous-reference"]
+    },
+    {
+      "id": "train-06-cover-format-audit",
+      "instruction": "Audit a post directory at /tmp/test-post/ and handle its cover. The directory has: cover.png (4000x3000, 5MB), frontmatter references 'cover: /images/old-cover.png'. Determine the correct approach: resize existing? regenerate? update frontmatter?",
+      "input_data": "Post has cover.png at wrong size (4000x3000). Frontmatter points to /images/old-cover.png (absolute path in static/images/). Article: 'The Persistence of Memory in AI Systems.'",
+      "expected_outcome": "Agent recognizes the cover.png is non-standard (wrong size, wrong format reference) and follows the correct workflow: either resize+convert+update-frontmatter with existing gonzo cover, or regenerate. Reports decision rationale.",
+      "success_criteria": "Either resize or regenerate. Old cover removed. Frontmatter updated to standard cover.jpg convention. Report explains the decision path.",
+      "tags": ["format-audit", "nonstandard", "frontmatter"]
+    }
+  ]
+}

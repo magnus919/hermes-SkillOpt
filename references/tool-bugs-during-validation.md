@@ -18,7 +18,9 @@ if not isinstance(data, list):        # dict is not a list
 
 The API returned `{"data": {"web": [results], "images": [], "news": []}}` but the CLI read `data` as a flat list then threw it away when it got a dict.
 
-**Diagnosis method:**
+**Key diagnostic for asana:** The `asana custom-fields list` command returned 404 even though the skill correctly documented the CLI syntax. The subagent found the command in the Quick Reference, ran it correctly, but got an API error. The tool-bug signal was: **command executed successfully at the CLI level (exit code 1 from API, not from argparse)**, which differs from a skill-gap signal where argparse itself rejects the command with "unrecognized arguments" or the subagent can't find the command at all.
+
+## Diagnosis method
 1. Ran validation tasks → all failed → systematic failure pattern (not flaky)
 2. Checked `--json` output — empty `results` array confirmed the CLI wasn't receiving data
 3. Direct API call via `curl` — confirmed the *server* returned correct results

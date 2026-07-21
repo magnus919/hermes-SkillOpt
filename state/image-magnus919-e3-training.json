@@ -1,0 +1,44 @@
+{
+  "type": "training",
+  "epoch": 3,
+  "skill": "image-magnus919",
+  "focus": "Pattern expansion \u2014 orphaned references, iterative refinement workflow, error recovery",
+  "tasks": [
+    {
+      "id": "train-07-triptych",
+      "instruction": "You need covers for a 3-article series on magnus919.com about 'The Three Architectures of Memory' (human, machine, hybrid). Each article reveals a different facet of the same subject. Plan the covers using the triptych pattern from the skill's reference files.",
+      "input_data": "Series: Article 1 \u2014 human memory (forgetting, association, dream consolidation). Article 2 \u2014 machine memory (vector embeddings, attention, retrieval). Article 3 \u2014 hybrid memory (RAG, memory-augmented generation). Check the skill's references/ directory for relevant patterns.",
+      "expected_outcome": "Three covers planned as a triptych: same subject (memory architecture), three material shifts. Agent discovers and uses references/triptych-series-cover-pattern.md.",
+      "success_criteria": "Triptych pattern applied: same subject, three croppings/material shifts. Reference file discovered. Each cover has a one-line SUBJECT. Gonzo template used.",
+      "tags": [
+        "triptych",
+        "orphaned-reference",
+        "multi-article"
+      ]
+    },
+    {
+      "id": "train-08-iterative-refinement",
+      "instruction": "Generate a gonzo cover for an article titled 'The Ghost in the Transformer.' First generation produces a scene that's 90% right but the central figure's face is obscured by an ink blob. Apply the iterative refinement workflow to fix just the face.",
+      "input_data": "First generation done. Ink blob covers the figure's face. Apply iterative refinement: crop to 1024x1024, call edits API with 'what to keep' and 'what to change' instructions. Max 2 refinement cycles.",
+      "expected_outcome": "Iterative refinement applied correctly. Prompt specifies what to KEEP (composition, colors, background) and what to CHANGE (remove ink blob, reveal face). Max 2 cycles.",
+      "success_criteria": "Edits API called with first-generation image as source. Prompt explicitly states what to keep and what to change. Only 1-2 cycles attempted.",
+      "tags": [
+        "iterative-refinement",
+        "fix",
+        "edits-api"
+      ]
+    },
+    {
+      "id": "train-09-error-recovery",
+      "instruction": "Generate a gonzo cover for an article titled 'The Man Who Would Be Oracle' about Larry Ellison's influence on enterprise software. The name 'Oracle' may trigger the safety system. Apply the appropriate error recovery pattern.",
+      "input_data": "Article about Larry Ellison at Oracle. Name 'Oracle' may trigger safety rejection. Reference: the skill's pitfalls document the 'rephrase to describe scene without naming subject' workaround.",
+      "expected_outcome": "If safety system rejects, agent applies the workaround: rephrase prompt to describe the scene (glass office tower, yacht, Hawaiian island, enterprise software castle) without naming 'Oracle' or 'Ellison'.",
+      "success_criteria": "Proactive workaround applied. Prompt describes scene without naming the subject. If rejection occurs, retries with rephrased prompt.",
+      "tags": [
+        "error-recovery",
+        "safety-workaround",
+        "rephrase"
+      ]
+    }
+  ]
+}
