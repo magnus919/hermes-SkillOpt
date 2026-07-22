@@ -16,6 +16,24 @@ SKILLOPT_DIR="${SKILLOPT_DIR:-$HOME/.hermes/SkillOpt}"
 HERMES="${HERMES:-hermes}"
 ERROR_LOG="${SKILLOPT_DIR}/hermes-oneshot-errors.log"
 
+# Resolve symlink chains before trusting the runner's sibling scripts directory.
+RUN_PHASE_SOURCE="${BASH_SOURCE[0]}"
+RUN_PHASE_LINKS=0
+while [[ -L "$RUN_PHASE_SOURCE" ]]; do
+    RUN_PHASE_LINKS=$((RUN_PHASE_LINKS + 1))
+    if (( RUN_PHASE_LINKS > 40 )); then
+        echo "ERROR: Could not resolve run-phase.sh symlink chain." >&2
+        exit 1
+    fi
+    RUN_PHASE_DIR="$(cd -P "$(dirname "$RUN_PHASE_SOURCE")" && pwd)"
+    RUN_PHASE_SOURCE="$(readlink "$RUN_PHASE_SOURCE")"
+    if [[ "$RUN_PHASE_SOURCE" != /* ]]; then
+        RUN_PHASE_SOURCE="$RUN_PHASE_DIR/$RUN_PHASE_SOURCE"
+    fi
+done
+SCRIPTS_DIR="$(cd -P "$(dirname "$RUN_PHASE_SOURCE")" && pwd)"
+unset RUN_PHASE_SOURCE RUN_PHASE_LINKS RUN_PHASE_DIR
+
 
 # Cosine-decayed edit budget computation.
 # The first argument is the number of completed epochs; budget decays from
@@ -260,8 +278,8 @@ print(f'    Wrote: {output_file}')
             cp "$rf" "$rdest"
         done
         shopt -u nullglob
-        SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)" PYTHONPATH="$SCRIPTS_DIR:$PYTHONPATH" \
-            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
+        PYTHONPATH="$SCRIPTS_DIR" \
+            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 -P << 'PYEOF'
 import os, sys
 import pyramid_utils
 state_dir = os.environ["STATE_DIR"]
@@ -274,7 +292,7 @@ PYEOF
         mkdir -p "$rollout_pyramid_dir/01-summary" "$rollout_pyramid_dir/02-analysis" "$rollout_pyramid_dir/03-dossiers"
         EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" ROLLOUT_DIR="$rollout_dir" \
             ROLLOUT_PYRAMID_DIR="$rollout_pyramid_dir" \
-            SCRIPTS_DIR="$SCRIPTS_DIR" PYTHONPATH="$SCRIPTS_DIR:$PYTHONPATH" python3 << 'PYEOF'
+            python3 << 'PYEOF'
 import json, os, sys
 from datetime import datetime, timezone
 
@@ -484,7 +502,7 @@ run_reflect() {
             rollout_glob="$rollout_source/epoch-$EPOCH-*.json"
         fi
         local rollouts_json
-        ROLLOUT_GLOB="$rollout_glob" python3 -c "
+        rollouts_json=$(ROLLOUT_GLOB="$rollout_glob" python3 -c "
 import json, glob, os
 records = []
 for f in sorted(glob.glob(os.environ['ROLLOUT_GLOB'])):
@@ -537,8 +555,8 @@ print(f'  Reflection written: $reflect_dir/epoch-$EPOCH.json')
 "
         # Copy reflection to unified pyramid and regenerate root files
         cp "$reflect_dir/epoch-$EPOCH.json" "$STATE_DIR/03-dossiers/epoch-$EPOCH-reflection.json"
-        SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)" PYTHONPATH="$SCRIPTS_DIR:$PYTHONPATH" \
-            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
+        PYTHONPATH="$SCRIPTS_DIR" \
+            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 -P << 'PYEOF'
 import os, sys; import pyramid_utils
 pyramid_utils.update_root_pyramid(os.environ["STATE_DIR"], os.environ["EPOCH"])
 PYEOF
@@ -627,8 +645,8 @@ print(f'  Proposals written: $proposal_dir/epoch-$EPOCH.json ({len(proposals)} e
 "
         # Copy proposals to unified pyramid and regenerate root files
         cp "$proposal_dir/epoch-$EPOCH.json" "$STATE_DIR/03-dossiers/epoch-$EPOCH-proposals.json"
-        SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)" PYTHONPATH="$SCRIPTS_DIR:$PYTHONPATH" \
-            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
+        PYTHONPATH="$SCRIPTS_DIR" \
+            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 -P << 'PYEOF'
 import os, sys; import pyramid_utils
 pyramid_utils.update_root_pyramid(os.environ["STATE_DIR"], os.environ["EPOCH"])
 PYEOF
@@ -795,13 +813,14 @@ run_validate() {
 
         # For each proposal, apply it to an in-memory copy of the skill,
         # run held-out validation tasks, and compare against stored baseline.
+        PYTHONPATH="$SCRIPTS_DIR" \
         EPOCH="$EPOCH" \
         TARGET_PATH="$TARGET" \
         PROPOSAL_FILE="$proposal_file" \
         TEST_SUITE="$TEST_SUITE" \
         VAL_DIR="$validation_dir" \
         HERMES="$HERMES" \
-        python3 << 'PYEOF'
+        python3 -P << 'PYEOF'
 import json, os, shlex, shutil, subprocess, sys, tempfile, time
 from datetime import datetime, timezone
 
@@ -1275,9 +1294,7 @@ def apply_edit(skill_content, edit):
     return skill_content, f"unknown edit type: {edit_type}"
 
 
-# Load shared pyramid utilities
-_scripts_dir = os.path.join(os.path.dirname(os.path.dirname(val_dir)), "scripts")
-sys.path.insert(0, _scripts_dir)
+# Load shared pyramid utilities from PYTHONPATH supplied by the shell runner.
 import pyramid_utils
 
 
@@ -2179,8 +2196,8 @@ print(f'  Recommendation: {rec}')
 "
         # Copy slow-meta to unified pyramid and regenerate root files
         cp "$reflect_dir/slow-meta-epoch-$EPOCH.json" "$STATE_DIR/03-dossiers/epoch-$EPOCH-slowmeta.json"
-        SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)" PYTHONPATH="$SCRIPTS_DIR:$PYTHONPATH" \
-            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
+        PYTHONPATH="$SCRIPTS_DIR" \
+            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 -P << 'PYEOF'
 import os, sys; import pyramid_utils
 pyramid_utils.update_root_pyramid(os.environ["STATE_DIR"], os.environ["EPOCH"])
 PYEOF
