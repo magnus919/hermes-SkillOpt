@@ -7,7 +7,8 @@ SkillOpt is a methodology skill that any Hermes Agent can load to run controlled
 ## Where It Lives
 
 - Skill: `~/.hermes/skills/skillopt/`
-- Per-target state: `~/.hermes/SkillOpt/<skill-name>/`
+- Per-target state (agent-orchestrated runs — the primary interface): `~/.hermes/skillopt-runs/<skill>-<date>/` — unified artifact-pyramid layout (`00-index.md`, `01-summary/`, `02-analysis/`, `03-dossiers/`), see `references/artifact-pyramid-phase-outputs.md`
+- Legacy runs and the power-user shell scripts (`seed-board.sh`, `run-phase.sh`, `archive-run.sh`) use `~/.hermes/SkillOpt/<skill-slug>/` — the scripts honor the `SKILLOPT_DIR` override
 
 ## Key Files
 
@@ -48,7 +49,7 @@ Keep these separate. Do not treat SkillOpt infrastructure failures as target-ski
 - Script names are `kebab-case.sh`
 - Phase artifact JSON schemas are documented in `references/artifact-formats.md`
 - Board slugs follow `skillopt-<skill-slug>` format, where `<skill-slug>` is lowercase kebab-case
-- State directories follow `~/.hermes/SkillOpt/<skill-slug>/`
+- Agent-orchestrated run state directories follow `~/.hermes/skillopt-runs/<skill>-<date>/` with the unified artifact pyramid (see `references/artifact-pyramid-phase-outputs.md`); the power-user shell scripts default to `~/.hermes/SkillOpt/<skill-slug>/` and honor the `SKILLOPT_DIR` override
 
 ## Change Workflow
 
