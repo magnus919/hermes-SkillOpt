@@ -286,6 +286,6 @@ Acceptance rule: reject any edit with lower `pass_rate` than baseline. If pass r
     "target": "/home/user/.hermes/skills/content/hugo-blog/SKILL.md",
     "final_epoch": 4,
     "archived_at": "2026-05-29T19:00:00Z",
-    "state_dir": "/home/user/.hermes/SkillOpt/hugo-blog"
+    "state_dir": "/home/user/.hermes/skillopt-runs/hugo-blog-20260529"
 }
 ```
