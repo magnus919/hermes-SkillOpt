@@ -96,6 +96,18 @@ hermes-SkillOpt/
 | **SkillOpt** | Yifan Yang et al., arXiv 2605.23904 (2025) | Prescriptive — the optimization pipeline |
 | **SkillLens** | Microsoft Research, arXiv 2605.23899 (2025) | Descriptive — why the methodology is necessary |
 
+## Testing
+
+The repository's blocking quality gates are documented in [TESTING.md](TESTING.md). The local checks require no network, Docker, API keys, or live Hermes installation:
+
+```bash
+bash -n scripts/*.sh
+python3 -m compileall -q scripts tests
+python3 -m unittest discover -s tests -v
+```
+
+The suite includes deterministic integration coverage for seed, phase, archive, and artifact-pyramid behavior. Mutation and coverage results are advisory, risk-scoped evidence rather than universal quality scores.
+
 ## License
 
 MIT — see LICENSE file.

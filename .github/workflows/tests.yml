@@ -4,13 +4,16 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  static:
+    name: Static contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -18,5 +21,23 @@ jobs:
           python-version: "3.11"
       - name: Check shell syntax
         run: bash -n scripts/*.sh
+      - name: Compile Python sources
+        run: python -m compileall -q scripts tests
+      - name: Check repository contracts
+        run: python -m unittest tests.test_repository_contracts -v
+
+  tests:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.11"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
       - name: Run test suite
         run: python -m unittest discover -s tests -v

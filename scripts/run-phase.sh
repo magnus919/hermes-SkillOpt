@@ -278,9 +278,12 @@ print(f'    Wrote: {output_file}')
             cp "$rf" "$rdest"
         done
         shopt -u nullglob
+        SCRIPTS_DIR="$SCRIPTS_DIR" \
         PYTHONPATH="$SCRIPTS_DIR" \
-            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 -P << 'PYEOF'
+            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
 import os, sys
+trusted_scripts = os.environ["SCRIPTS_DIR"]
+sys.path = [trusted_scripts] + [p for p in sys.path if p not in ("", os.getcwd(), trusted_scripts)]
 import pyramid_utils
 state_dir = os.environ["STATE_DIR"]
 epoch = os.environ["EPOCH"]
@@ -555,9 +558,13 @@ print(f'  Reflection written: $reflect_dir/epoch-$EPOCH.json')
 "
         # Copy reflection to unified pyramid and regenerate root files
         cp "$reflect_dir/epoch-$EPOCH.json" "$STATE_DIR/03-dossiers/epoch-$EPOCH-reflection.json"
+        SCRIPTS_DIR="$SCRIPTS_DIR" \
         PYTHONPATH="$SCRIPTS_DIR" \
-            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 -P << 'PYEOF'
-import os, sys; import pyramid_utils
+            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
+import os, sys
+trusted_scripts = os.environ["SCRIPTS_DIR"]
+sys.path = [trusted_scripts] + [p for p in sys.path if p not in ("", os.getcwd(), trusted_scripts)]
+import pyramid_utils
 pyramid_utils.update_root_pyramid(os.environ["STATE_DIR"], os.environ["EPOCH"])
 PYEOF
     else
@@ -645,9 +652,13 @@ print(f'  Proposals written: $proposal_dir/epoch-$EPOCH.json ({len(proposals)} e
 "
         # Copy proposals to unified pyramid and regenerate root files
         cp "$proposal_dir/epoch-$EPOCH.json" "$STATE_DIR/03-dossiers/epoch-$EPOCH-proposals.json"
+        SCRIPTS_DIR="$SCRIPTS_DIR" \
         PYTHONPATH="$SCRIPTS_DIR" \
-            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 -P << 'PYEOF'
-import os, sys; import pyramid_utils
+            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
+import os, sys
+trusted_scripts = os.environ["SCRIPTS_DIR"]
+sys.path = [trusted_scripts] + [p for p in sys.path if p not in ("", os.getcwd(), trusted_scripts)]
+import pyramid_utils
 pyramid_utils.update_root_pyramid(os.environ["STATE_DIR"], os.environ["EPOCH"])
 PYEOF
 
@@ -813,6 +824,7 @@ run_validate() {
 
         # For each proposal, apply it to an in-memory copy of the skill,
         # run held-out validation tasks, and compare against stored baseline.
+        SCRIPTS_DIR="$SCRIPTS_DIR" \
         PYTHONPATH="$SCRIPTS_DIR" \
         EPOCH="$EPOCH" \
         TARGET_PATH="$TARGET" \
@@ -820,9 +832,11 @@ run_validate() {
         TEST_SUITE="$TEST_SUITE" \
         VAL_DIR="$validation_dir" \
         HERMES="$HERMES" \
-        python3 -P << 'PYEOF'
+        python3 << 'PYEOF'
 import json, os, shlex, shutil, subprocess, sys, tempfile, time
 from datetime import datetime, timezone
+trusted_scripts = os.environ["SCRIPTS_DIR"]
+sys.path = [trusted_scripts] + [p for p in sys.path if p not in ("", os.getcwd(), trusted_scripts)]
 
 DEFAULT_METRIC_WEIGHTS = {
     "pass_rate": 0.55,
@@ -2196,9 +2210,13 @@ print(f'  Recommendation: {rec}')
 "
         # Copy slow-meta to unified pyramid and regenerate root files
         cp "$reflect_dir/slow-meta-epoch-$EPOCH.json" "$STATE_DIR/03-dossiers/epoch-$EPOCH-slowmeta.json"
+        SCRIPTS_DIR="$SCRIPTS_DIR" \
         PYTHONPATH="$SCRIPTS_DIR" \
-            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 -P << 'PYEOF'
-import os, sys; import pyramid_utils
+            EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
+import os, sys
+trusted_scripts = os.environ["SCRIPTS_DIR"]
+sys.path = [trusted_scripts] + [p for p in sys.path if p not in ("", os.getcwd(), trusted_scripts)]
+import pyramid_utils
 pyramid_utils.update_root_pyramid(os.environ["STATE_DIR"], os.environ["EPOCH"])
 PYEOF
     else

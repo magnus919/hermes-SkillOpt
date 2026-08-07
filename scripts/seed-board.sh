@@ -29,6 +29,15 @@ slugify() {
     printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
 }
 
+validate_positive_count() {
+    local name="$1"
+    local value="$2"
+    if [[ ! "$value" =~ ^[1-9][0-9]*$ ]]; then
+        echo "ERROR: --${name} must be a positive integer." >&2
+        exit 1
+    fi
+}
+
 # --- Argument parsing ---
 TARGET=""
 TRAINING_COUNT=""
@@ -56,6 +65,9 @@ if [[ -z "$TARGET" || -z "$TRAINING_COUNT" || -z "$VALIDATION_COUNT" ]]; then
     echo "ERROR: --target, --training, and --validation are required."
     show_usage
 fi
+
+validate_positive_count "training" "$TRAINING_COUNT"
+validate_positive_count "validation" "$VALIDATION_COUNT"
 
 TARGET="$(cd "$(dirname "$TARGET")" 2>/dev/null && pwd)/$(basename "$TARGET")"
 if [[ ! -f "$TARGET" ]]; then
@@ -111,6 +123,9 @@ if [[ -n "$VAL_FILE" ]]; then
     VALIDATION_COUNT=$(echo "$VAL_TASKS" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
     echo "Loaded $VALIDATION_COUNT validation tasks from: $VAL_FILE"
 fi
+
+validate_positive_count "training" "$TRAINING_COUNT"
+validate_positive_count "validation" "$VALIDATION_COUNT"
 
 # --- Setup state directory ---
 
