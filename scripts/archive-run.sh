@@ -79,10 +79,12 @@ if os.path.isdir(dossiers_dir):
         if not fname.endswith(".json"):
             continue
         parts = fname.split("-", 2)
-        if len(parts) >= 2 and parts[0] == "epoch":
+        if len(parts) >= 2 and parts[0] == "epoch" and parts[1].isdigit():
             e = parts[1]
             epochs.add(e)
-            phase = parts[2].split("-")[0] if len(parts) > 2 else "unknown"
+            phase_token = parts[2].split("-")[0] if len(parts) > 2 else "unknown"
+            phase = os.path.splitext(phase_token)[0]
+            phase = {"proposals": "proposal"}.get(phase, phase)
             phase_map.setdefault(e, {}).setdefault(phase, []).append(fname)
 
 epochs_sorted = sorted(epochs, key=int)
@@ -143,10 +145,17 @@ with open(os.path.join(state_dir, "02-analysis", "epoch-trajectory.md"), "w") as
 for e in epochs_sorted:
     phases = phase_map.get(e, {})
     lines = [f"# Epoch {e} Overview", ""]
-    for pname in ("baseline", "rollout", "reflection", "proposal", "validation", "slowmeta"):
+    for pname, label in (
+        ("baseline", "Baseline"),
+        ("rollout", "Rollout"),
+        ("reflection", "Reflection"),
+        ("proposal", "Proposals"),
+        ("validation", "Validation"),
+        ("slowmeta", "Slow-meta"),
+    ):
         files = phases.get(pname, [])
         if files:
-            lines.append(f"**{pname.title()}:** {len(files)} dossier(s)")
+            lines.append(f"**{label}:** {len(files)} dossier(s)")
     lines.append("")
     lines.append("## SOURCES (LAYER 3 NAVIGATION)")
     for pname in ("baseline", "rollout", "reflection", "proposal", "validation", "slowmeta"):
