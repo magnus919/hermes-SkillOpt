@@ -74,6 +74,33 @@ observable that can only come from it:
 Score that observable mechanically from the raw response. A worker's claim that
 it followed the reference file is not evidence that it read one.
 
+## When no delegation substrate exists
+
+A session may expose neither `delegate_task` nor a kanban board, and the skill
+may be evaluated with a tool the orchestrator has to call itself (an image
+generator, a renderer, a device flasher). The documented paths above then do not
+apply. Do not stall, and do not quietly produce trajectories that read like
+subagent runs.
+
+Run the rollouts in-session instead, and record what that costs:
+
+1. **Load per variant, not from memory.** Read `<baseline_root>/SKILL.md` before
+   the baseline trajectories and `<candidate_root>/SKILL.md` before the
+   candidate. Same model, different artifact — that difference is the
+   intervention boundary, so keep it explicit.
+2. **Execute the real tool.** The orchestrator calls the generator or command
+   with whatever prompt or arguments the skill directs, then scores the returned
+   artifact itself. Reviewing whether the skill *would have* produced a good
+   answer is not a trajectory.
+3. **Record the limitation in the dossier.** Name the executor, state that
+   independence is weaker (the same model wrote the input and judged the
+   output), and state that an ablation baseline is not obtainable. Do not
+   simulate a skill-off trajectory: the model still holds the skill text in
+   context, so the ablation would measure nothing.
+4. **Never relabel.** An in-session trajectory is execution evidence, not
+   independent evidence. It must not be described as a subagent or board
+   rollout, in the dossier or in the final report.
+
 ## When transcription is acceptable
 
 Only when the harness cannot load a skill at all (a non-Hermes consumer, or a
