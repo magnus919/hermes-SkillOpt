@@ -102,6 +102,43 @@ Score these from the pixels, not the worker's report. A worker can call a revers
 
 **Correction rule:** retries must keep the original authoritative character reference as the primary input. Never replace it with the previous generated attempt; that turns a correction loop into compounding identity drift. Reject a correction that improves geometry by weakening likeness.
 
+## Portrayal Rejection Is Usually Compositional
+
+When the user rejects a generated image of a real person as unflattering, the cause is often the composition, not the wording. Seated, hunched, and leaning poses compress the torso and read as added weight even when the prompt contains no weight language at all. A skill whose only anti-weight guard is a banned adjective can pass every lexical check and still produce an unacceptable artifact.
+
+Diagnose before editing:
+
+1. Separate the trajectory into `criteria-invalid` (the user rejected the portrayal) and skill-relevant failure modes (what in the skill permitted it).
+2. Look at pose and framing first. If the figure is seated, hunched, or leaning, the fix is posture and framing, not more body words.
+3. Add compositional constraints: lean from the hips, straight back, shoulders back, waistband visible above the seat, and chest-up framing for portraits. Correct the pose before touching any body-mass vocabulary.
+
+Adding stronger body-mass adjectives to a skill that already bans the worst one makes the artifact worse, not better. Record the rejected artifact as evidence and keep the criterion that the corrected pose satisfied.
+
+## Credit Detection, Not Behavior, When the Medium Is Stochastic
+
+A held-out task can pass for the candidate and fail again on the installed artifact, including after a regeneration the skill itself required. When that happens the edit did not produce a reliable behavior change, and claiming one is false. The existing rule against crediting a later stochastic pass needs its mirror image.
+
+Score what the edit can actually guarantee:
+
+| Guarantee | Evidence |
+|---|---|
+| Detection | the trajectory identifies the defect instead of shipping it |
+| Rejection | the near-miss artifact is refused rather than excused |
+| Correction loop | a regenerate or limitation report follows the rejection |
+| Reliable behavior change | repeated passes across independent attempts — the only basis for a behavior claim |
+
+Carry the residual into the run summary as a tool limitation, name the mechanism (generator variance, sampler behavior, reference routing), and open the next epoch against it. A candidate that catches and refuses a defect is valuable even when it cannot prevent it.
+
+## Generator Physical Limits Are Part of the Skill
+
+Some requirements are physically beyond the medium. Repeated attempts at a strict 90-degree profile, a to-scale measurement graphic, or an exact multi-line text block can fail every time regardless of phrasing.
+
+When a hard gate loses repeatedly, do not keep adding emphasis. Make the rule achievable and name the limit in the skill itself:
+
+- **State the achievable angle.** Prefer a near-profile or three-quarter turn the medium renders reliably, and say why the strict angle is not offered.
+- **Move measurement work out of the generator.** Draw scales, labels, and tick marks deterministically after generation, from a per-image scan of the unmarked render.
+- **Keep the honesty rule.** When the generator cannot satisfy a gate, report the limitation instead of calling it a soft pass.
+
 ## Application to Other Creative Skills
 
 ### Writing Skills (write-draft)
