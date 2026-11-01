@@ -1,5 +1,37 @@
 {
   "commands": {
+    "checkpoints": {
+      "flags": [],
+      "subcommands": {
+        "status": {
+          "flags": [
+            "--help",
+            "--limit",
+            "-h"
+          ],
+          "subcommands": {}
+        }
+      }
+    },
+    "curator": {
+      "flags": [],
+      "subcommands": {
+        "pin": {
+          "flags": [
+            "--help",
+            "-h"
+          ],
+          "subcommands": {}
+        },
+        "status": {
+          "flags": [
+            "--help",
+            "-h"
+          ],
+          "subcommands": {}
+        }
+      }
+    },
     "kanban": {
       "flags": [
         "--board",
@@ -178,6 +210,14 @@
         }
       }
     },
+    "pause": {
+      "flags": [
+        "--help",
+        "--reason",
+        "-h"
+      ],
+      "subcommands": {}
+    },
     "sessions": {
       "flags": [],
       "subcommands": {
@@ -247,6 +287,18 @@
             "-p"
           ],
           "subcommands": {}
+        },
+        "snapshot": {
+          "flags": [],
+          "subcommands": {
+            "export": {
+              "flags": [
+                "--help",
+                "-h"
+              ],
+              "subcommands": {}
+            }
+          }
         }
       }
     },
@@ -262,6 +314,15 @@
           "subcommands": {}
         }
       }
+    },
+    "usage": {
+      "flags": [
+        "--help",
+        "--json",
+        "--provider",
+        "-h"
+      ],
+      "subcommands": {}
     }
   },
   "generated_at": "2026-11-01",
