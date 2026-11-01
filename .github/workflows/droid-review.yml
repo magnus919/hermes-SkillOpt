@@ -43,11 +43,39 @@ jobs:
       id-token: write
       actions: read
     steps:
+      # A queued run can reach this point after the PR was merged and its branch
+      # deleted, in which case the action's `gh pr checkout` fails with
+      # "couldn't find remote ref" and reports a red X that looks like a code
+      # defect. Reviewing already-merged code is also no longer actionable, so
+      # skip deliberately and record why instead of failing.
+      - name: Guard against merged PR or deleted branch
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          state=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json state -q .state 2>/dev/null || echo UNKNOWN)
+          branch=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefName -q .headRefName 2>/dev/null || echo "")
+          if [ "$state" != "OPEN" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping review: PR #${PR_NUMBER} is ${state}, so there is nothing to review." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ -n "$branch" ] && ! gh api "repos/${REPO}/branches/${branch}" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping review: branch '${branch}' no longer exists on origin." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
       - name: Checkout repository
+        if: steps.guard.outputs.skip != 'true'
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
       - name: Run Droid Auto Review
+        if: steps.guard.outputs.skip != 'true'
         uses: Factory-AI/droid-action@7c7bfea2aa3bb7ea87579402cc1d89dbcf6b13b3
         with:
           factory_api_key: ${{ secrets.FACTORY_API_KEY }}
