@@ -1,0 +1,230 @@
+{
+  "commands": {
+    "kanban": {
+      "flags": [
+        "--board",
+        "--help",
+        "-h"
+      ],
+      "subcommands": {
+        "block": {
+          "flags": [
+            "--help",
+            "--ids",
+            "--kind",
+            "-h"
+          ],
+          "subcommands": {}
+        },
+        "boards": {
+          "flags": [
+            "--help",
+            "-h"
+          ],
+          "subcommands": {
+            "create": {
+              "flags": [
+                "--color",
+                "--default-workdir",
+                "--description",
+                "--help",
+                "--icon",
+                "--name",
+                "--switch",
+                "-h"
+              ],
+              "subcommands": {}
+            },
+            "list": {
+              "flags": [
+                "--all",
+                "--help",
+                "--json",
+                "-h"
+              ],
+              "subcommands": {}
+            },
+            "switch": {
+              "flags": [
+                "--help",
+                "-h"
+              ],
+              "subcommands": {}
+            }
+          }
+        },
+        "create": {
+          "flags": [
+            "--assignee",
+            "--body",
+            "--body-file",
+            "--branch",
+            "--completion-contract",
+            "--created-by",
+            "--goal",
+            "--goal-max-turns",
+            "--help",
+            "--idempotency-key",
+            "--initial-status",
+            "--json",
+            "--max-retries",
+            "--max-runtime",
+            "--model",
+            "--parent",
+            "--priority",
+            "--project",
+            "--provider",
+            "--skill",
+            "--tenant",
+            "--triage",
+            "--workspace",
+            "-h"
+          ],
+          "subcommands": {}
+        },
+        "list": {
+          "flags": [
+            "--archived",
+            "--assignee",
+            "--help",
+            "--json",
+            "--mine",
+            "--session",
+            "--sort",
+            "--status",
+            "--step-key",
+            "--tenant",
+            "--workflow-template-id",
+            "-h"
+          ],
+          "subcommands": {}
+        }
+      }
+    },
+    "sessions": {
+      "flags": [],
+      "subcommands": {
+        "export": {
+          "flags": [
+            "--after",
+            "--before",
+            "--branch",
+            "--chat-id",
+            "--chat-type",
+            "--cwd",
+            "--delete-after-verified",
+            "--dry-run",
+            "--end-reason",
+            "--force",
+            "--format",
+            "--help",
+            "--lineage",
+            "--max-cost",
+            "--max-messages",
+            "--max-tokens",
+            "--max-tool-calls",
+            "--min-cost",
+            "--min-messages",
+            "--min-tokens",
+            "--min-tool-calls",
+            "--model",
+            "--newer-than",
+            "--no-redact",
+            "--older-than",
+            "--only",
+            "--provider",
+            "--public",
+            "--redact",
+            "--session-id",
+            "--source",
+            "--title",
+            "--upload",
+            "--user",
+            "--yes",
+            "-h",
+            "-y"
+          ],
+          "subcommands": {}
+        },
+        "list": {
+          "flags": [
+            "--help",
+            "--limit",
+            "--source",
+            "--workspace",
+            "-h"
+          ],
+          "subcommands": {}
+        }
+      }
+    },
+    "skills": {
+      "flags": [],
+      "subcommands": {
+        "list": {
+          "flags": [
+            "--enabled-only",
+            "--help",
+            "--source",
+            "-h",
+            "-p"
+          ],
+          "subcommands": {}
+        }
+      }
+    },
+    "tools": {
+      "flags": [],
+      "subcommands": {
+        "enable": {
+          "flags": [
+            "--help",
+            "--platform",
+            "-h"
+          ],
+          "subcommands": {}
+        }
+      }
+    }
+  },
+  "generated_at": "2026-11-01",
+  "global_flags": [
+    "--accept-hooks",
+    "--checkpoints",
+    "--cli",
+    "--continue",
+    "--dev",
+    "--help",
+    "--ignore-rules",
+    "--ignore-user-config",
+    "--in",
+    "--model",
+    "--native",
+    "--no-restore-cwd",
+    "--oneshot",
+    "--pass-session-id",
+    "--provider",
+    "--reasoning",
+    "--resume",
+    "--safe-mode",
+    "--skills",
+    "--toolsets",
+    "--tui",
+    "--tui-native",
+    "--usage-file",
+    "--version",
+    "--worktree",
+    "--yolo",
+    "-V",
+    "-c",
+    "-h",
+    "-m",
+    "-r",
+    "-s",
+    "-t",
+    "-w",
+    "-z"
+  ],
+  "hermes_version": "Hermes Agent v0.22.5 (2026.9.24) \u00b7 stable \u00b7 local bf0203a794a0",
+  "schema": 1
+}

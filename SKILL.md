@@ -4,13 +4,13 @@ description: Run controlled skill optimization cycles on any skill document. Use
 version: 1.2.29
 author: Jasper (on behalf of Magnus Hedemark)
 license: MIT
-compatibility: Hermes Agent only — uses hermes kanban and hermes oneshot — not compatible with Claude Code, Copilot, OpenCode, or Cursor
+compatibility: Hermes Agent only — uses the `hermes -z` noninteractive flag and, optionally, `hermes kanban` — not compatible with Claude Code, Copilot, OpenCode, or Cursor
 platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [optimization, skills, kanban, methodology, validation, agent-skills]
     related_skills: [kanban-orchestrator, kanban-worker, plan]
-    requires_toolsets: [terminal, kanban]
+    requires_toolsets: [terminal]
 source_repo: "https://github.com/magnus919/hermes-SkillOpt"
 ---
 
@@ -158,14 +158,36 @@ The edit budget is configurable in `board-metadata.json` under `edit_budget`.
 
 3. The agent loads this skill via `skill_view(name='skillopt')`, guides you through defining training and validation tasks, seeds the kanban board, and orchestrates the six-phase pipeline — reporting results at each stage.
 
+### Runtime requirements
+
+- **`terminal` is required.** Rollouts, validation, and merge all run commands.
+- **`kanban` is optional substrate.** Declare it only if you intend to use the
+  board-driven scripts. Hermes ships the kanban toolset disabled by default, so
+  requiring it in frontmatter hides this skill from the skill index on a stock
+  install. If you want the board, enable it explicitly:
+  ```bash
+  hermes tools enable kanban
+  ```
+  The conversational path (Phase 1-6 orchestrated in-session with
+  `delegate_task`) needs no board at all.
+- **A recorded CLI contract guards the commands this skill documents.** The
+  repository's CI cannot install Hermes, so `contracts/hermes-cli-contract.json`
+  records the command surface the docs are allowed to cite. Verify it locally
+  before a release:
+  ```bash
+  python3 scripts/hermes_contract.py --check-docs
+  python3 scripts/hermes_contract.py --verify-live
+  ```
+  After upgrading Hermes, run `--refresh` and review the diff before committing.
+
 ## Scripts — Power Users Only
 
-The primary interface for SkillOpt is conversational — your agent drives the pipeline. These shell scripts exist for power users who want to run phases from the command line instead. The agent ignores them and uses `hermes oneshot` + `hermes kanban` directly.
+The primary interface for SkillOpt is conversational — your agent drives the pipeline. These shell scripts exist for power users who want to run phases from the command line instead. The agent ignores them and uses `hermes -z` + `hermes kanban` directly.
 
 **Known limitation:** The shell scripts (`run-phase.sh`, `seed-board.sh`) are unreliable in this environment and should be avoided for phase execution. Use the conversational approach instead:
 
-- **Rollouts:** `delegate_task` for each training task (handles multi-line instructions correctly, runs in parallel, captures full output). The shell script's `--exec` mode frequently returns 0 records written due to oneshot failures that are silently swallowed by `2>/dev/null`.
-- **Reflect:** Write the reflection JSON directly from rollout records. The shell script's oneshot prompt often returns `{"error": "execution failed"}` without useful diagnostics.
+- **Rollouts:** `delegate_task` for each training task (handles multi-line instructions correctly, runs in parallel, captures full output). The shell script's `--exec` mode frequently returns 0 records written because `hermes -z` failures are silently swallowed by `2>/dev/null`.
+- **Reflect:** Write the reflection JSON directly from rollout records. The shell script's `hermes -z` reflection prompt often returns `{"error": "execution failed"}` without useful diagnostics.
 - **Seed flags:** `seed-board.sh` uses `--train-tasks-file` and `--val-tasks-file` (not `--test-suite`). Task files must be plain JSON arrays, not objects with a `tasks` key. Kanban's `--board` is a global option and must precede the subcommand: `hermes kanban --board skillopt-<name> create ...`, not `hermes kanban create ... --board ...`. Do not trust a board switch alone: verify with `hermes kanban --board skillopt-<name> list` and `boards list` counts before creating tasks. `boards show` reports the process-wide active board and is not evidence that a `--board`-scoped operation targeted the intended board.
 - **Pyramid utils:** When calling `update_root_pyramid()` outside the PYEOF blocks, set `PYTHONPATH` to the skillopt `scripts/` directory using its absolute path: `PYTHONPATH="/Users/magnus/.hermes/skills/skillopt/scripts:$PYTHONPATH"`. The `dirname "$0"` approach may not resolve correctly from python3 heredocs.
 
@@ -245,7 +267,7 @@ The `seed-board.sh` triple-quote JSON bug was fixed in v1.1.0 (omnibus PR #12).
 - **A greenfield template is an executable contract, not just documentation.** A rollout can pass while a canonical template contradicts the skill's own decision rules or contains a field that the current implementation rejects. Before accepting template edits, run the rendered template through the target tool's config/schema validation and one bounded, non-destructive smoke path. Treat official documentation and the running implementation as separate evidence; when they disagree, record the compatibility boundary and prefer the tested implementation for portable defaults.- **Atom/molecule scope creep is a rollout signal.** Capture structural mismatches as failure modes.
 - **The first failure pattern in Reflect is usually the most visible, not the most impactful.** Survey the full landscape before converging.
 - **seed-board.sh JSON quoting fails on mixed-quote task content.** Use Python seed for tasks with special characters.
-- **Shell-script phase runners are unreliable — use delegate_task for all rollouts.** The `run-phase.sh --exec` mode frequently returns 0 records written because `hermes oneshot` calls fail silently (output swallowed by `2>/dev/null`). The reflect phase similarly returns `{"error": "execution failed"}` via oneshot. For rollouts, use `delegate_task` (handles multi-line instructions correctly, runs tasks in parallel, captures full output). For reflection, write the JSON directly from rollout records rather than relying on the shell script's oneshot prompt.
+- **Shell-script phase runners are unreliable — use delegate_task for all rollouts.** The `run-phase.sh --exec` mode frequently returns 0 records written because `hermes -z` calls fail silently (output swallowed by `2>/dev/null`). The reflect phase similarly returns `{"error": "execution failed"}` via `hermes -z`. For rollouts, use `delegate_task` (handles multi-line instructions correctly, runs tasks in parallel, captures full output). For reflection, write the JSON directly from rollout records rather than relying on the shell script's `hermes -z` prompt.
 - **Multi-epoch progression: Epoch 1 adds the what, Epoch 2 adds the how.** Design training tasks for multi-epoch awareness.
 - **Parallel rollouts via delegate_task speed the pipeline.** Use subagents for rollout execution.
 - **The "buried content" trap in Propose.** Before writing any "add" edit, check whether the target content already exists elsewhere in the skill or its reference files. A pitfall, a paragraph in a different section, or a reference document may already contain the exact rule you're about to duplicate. If the content exists but agents aren't following it, the real fix is prominence (cross-references, hard-gates, blockquote callouts), not duplication. This session produced a clear example: all four initially-proposed "add content" edits were already present in the target skill — just in locations agents weren't reaching during the Procedure. The edits that survived validation were the prominence fixes, not the content additions. Always search the full skill before proposing an add-type edit.
@@ -257,7 +279,7 @@ The `seed-board.sh` triple-quote JSON bug was fixed in v1.1.0 (omnibus PR #12).
 - **Creative-skill rollouts cannot verify style fidelity.** When running SkillOpt on creative/image-generation skills, rollout subagents produce prompts and submit them to the model — but neither the subagent nor any deterministic check can verify whether the output actually LOOKS like the skill's defined style. The subagent can verify that the workflow steps were followed (template used, size correct, format correct) but not whether the image matches the intended aesthetic. Style fidelity is a human-in-the-loop verification. Accept this limitation: creative-skill SkillOpt improves the PROCEDURAL quality (subject derivation, error recovery, path selection) but not the STYLE quality, which was already correct in the locked template. The two dimensions are independent.
 - **"Reverse" progressive disclosure — extracting content out, not adding in.** SkillOpt is usually additive (adding rules, examples, warnings). But when a skill is already very large (30KB+), the most impactful optimization may be REFACTORING: moving inline content to reference files, replacing it with a summary table and cross-reference, and loading the full detail on demand. The groktopus-branding Epoch 1 run is the worked example: 5 full cover prompt templates (~200 lines) were moved to references/cover-prompt-templates.md and replaced with a 5-row summary table. Rules of thumb: if inline content is more than ~50 lines and is only needed in a specific subset of task types, it's a candidate for extraction. If it's general procedure or hard rules, keep it inline.
 - **Multi-skill sessions reveal methodology gaps.** Running SkillOpt on multiple skills in one session (hyperframes → image-magnus919 → groktopus-branding) surfaces patterns that a single-skill run wouldn't show: the "buried content" trap recurred across all 3 skills, the progressive disclosure principle was validated in all 3, and the creative-skill limitations (style fidelity, acceptance criteria iteration) were only visible because a creative and a procedural skill were optimized back-to-back. When the user engages on a multi-skill session, capture cross-cutting observations in the meta-reflection document at `references/multi-skill-patterns.md` after the second skill completes, rather than waiting for a separate slow-meta phase.
-- **Validation via delegate_task works better than oneshot for prose-heavy edits.** Subagents can read the full skill context.
+- **Validation via delegate_task works better than `hermes -z` for prose-heavy edits.** Subagents can read the full skill context.
 - **Authoritative-source gates require source-quality reconciliation, not citation-shaped output.** A worker may report PASS after citing a plausible tertiary source, a generic reference table, or its own arithmetic. When a task requires an authoritative source of truth, the verifier must inspect the evidence ledger and confirm that the source is claim-specific, directly retrieved, appropriate to the claim type, and recorded with URL, access date, and scope. A generic or tertiary source is a failed authority gate, not partial proof; reconcile the worker's self-score before recording the rollout result. **Treat every conjunct in a compound claim independently:** a direct source for a product's price does not validate its launch date, availability, performance, or any other joined assertion. The de-spin pilot's aluminum-versus-titanium claim is the worked example: Wikipedia and Engineering Toolbox made the ratio plausible but could not establish Apple's unspecified exact alloys.
 - **A review verdict is a hypothesis, not ground truth.** Before a FAIL blocks merge, reconcile each API-contract finding against the current official documentation and live public schema. If a reviewer proposes a field the schema does not expose, while official docs demonstrate the existing call with the claimed identifier form, reject that finding with captured evidence rather than patching toward a nonexistent API. Fix only validated findings, rerun the deterministic gates, then re-review the exact new head. Preserve the false finding and rebuttal in the run artifacts so later reviewers do not resurrect it.
 - **Retrieval must govern emission, not decorate it.** A worker can retrieve official pages and still invent the bridges between them: hardware capability becomes framework support, a failed search becomes feature absence, command help becomes proof of safe execution, or an unknown component becomes a “typical” archetype. Require the pre-response ledger in [references/evidence-governed-execution.md](references/evidence-governed-execution.md), then score every material claim and command precondition in the raw response. During validation, require the compact observable gate result defined there; an internal ledger that never appears in the trajectory cannot be audited. A ledger written after prose is evidence-shaped rationalization, not a gate.

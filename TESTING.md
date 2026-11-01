@@ -21,6 +21,7 @@ The test shape is intentionally integration-heavy for a CLI tool. Unit tests pro
 4. The complete standard-library test suite passes on the supported Python 3.8 and 3.11 matrix versions.
 5. The phase-chain smoke test reaches merge and proves the accepted edit is written to the target workspace.
 6. Seed and archive integration tests prove artifact preservation and safe handling of shell-active task text.
+7. Every `hermes ...` command cited in the documentation resolves against `contracts/hermes-cli-contract.json`.
 
 A failure blocks the pull request. Tests must be deterministic and isolated. The workflow does not retry a failed test; a failure is investigated as a real failure unless a separate run demonstrates a flake.
 
@@ -28,7 +29,17 @@ A failure blocks the pull request. Tests must be deterministic and isolated. The
 
 - Coverage is diagnostic, not a release threshold. Use it to find untested P0/P1 paths, not to reward line execution.
 - Mutation testing is targeted review evidence for changed high-risk logic, not a universal score gate. Preserve the raw report, classify every in-scope mutant, and independently review meaningful survivors.
-- Verification against the installed Hermes CLI is an additional local or dedicated environment check because the generic repository CI does not install the Hermes application. The preflight is:
+- Verification against the installed Hermes CLI is an additional local or dedicated environment check because the generic repository CI does not install the Hermes application. Two layers exist. CI enforces documentation against a checked-in manifest (`contracts/hermes-cli-contract.json`), which fails when a doc cites a command the manifest does not declare. `--verify-live` closes the remaining gap locally by re-probing the installed CLI:
+
+```bash
+python3 scripts/hermes_contract.py --check-docs    # CI gate, no Hermes needed
+python3 scripts/hermes_contract.py --verify-live   # local gate, needs Hermes
+python3 scripts/hermes_contract.py --refresh       # deliberate manifest update
+```
+
+Refreshing the manifest is a reviewable act, not a fix for a failing test: if `--check-docs` fails, either the documentation is wrong or the CLI genuinely changed, and those need different responses.
+
+The manual preflight remains:
 
 ```bash
 hermes --help
@@ -48,6 +59,8 @@ When a blocking test fails, rerun it at most once. A pass on the one rerun is re
 bash -n scripts/*.sh
 python3 -m compileall -q scripts tests
 python3 -m unittest discover -s tests -v
+python3 scripts/hermes_contract.py --check-docs
+python3 scripts/hermes_contract.py --verify-live   # when Hermes is installed
 ```
 
 The tests use only the Python standard library and deterministic temporary fixtures, so they can run without Docker, network access, API keys, or a live Hermes installation.
