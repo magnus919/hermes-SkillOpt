@@ -76,7 +76,7 @@ jobs:
           fetch-depth: 1
       - name: Run Droid Auto Review
         if: steps.guard.outputs.skip != 'true'
-        uses: Factory-AI/droid-action@7c7bfea2aa3bb7ea87579402cc1d89dbcf6b13b3
+        uses: Factory-AI/droid-action@260eac443df653198ed70e9ea9d32980cfabde23
         with:
           factory_api_key: ${{ secrets.FACTORY_API_KEY }}
           automatic_review: true
