@@ -2,7 +2,7 @@
 
 ## Overview
 
-SkillOpt is a methodology skill that any Hermes Agent can load to run controlled optimization cycles on any skill document. It uses the built-in kanban system as its execution substrate.
+SkillOpt is a methodology skill that any Hermes Agent can load to run controlled optimization cycles on any skill document. The primary interface is conversational orchestration in-session with `delegate_task`; the built-in kanban system is optional substrate for board-driven runs (Hermes ships the kanban toolset disabled by default).
 
 ## Where It Lives
 
@@ -16,6 +16,8 @@ SkillOpt is a methodology skill that any Hermes Agent can load to run controlled
 - `scripts/seed-board.sh` — Board creation (power-user CLI alternative)
 - `scripts/run-phase.sh` — Phase execution (power-user CLI alternative)
 - `scripts/archive-run.sh` — Run cleanup (power-user CLI alternative)
+- `scripts/hermes_contract.py` — Documented-CLI contract checker (`--check-docs`, `--verify-live`, `--refresh`)
+- `contracts/hermes-cli-contract.json` — Recorded Hermes command surface the docs may cite
 - `references/methodology-guide.md` — Deep research rationale
 - `references/test-suite-design.md` — Task selection guidance
 - `references/artifact-formats.md` — JSON schemas for all phase outputs
@@ -56,7 +58,7 @@ Keep these separate. Do not treat SkillOpt infrastructure failures as target-ski
 1. File an issue describing the change
 2. Branch from main
 3. Make changes (SKILL.md, scripts, references)
-4. Run tests: `bash -n scripts/*.sh`, parse `templates/*.json`, verify documented Hermes CLI subcommands against `hermes --help`, and run a temp-state stub-Hermes smoke test for rollout → reflect → propose → validate → merge
+4. Run tests: `bash -n scripts/*.sh`, parse `templates/*.json`, run `python3 scripts/hermes_contract.py --check-docs` (and `--verify-live` where Hermes is installed), and run a temp-state stub-Hermes smoke test for rollout → reflect → propose → validate → merge
 5. Open a PR
 6. Wait for review
 7. Merge
