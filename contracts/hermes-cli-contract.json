@@ -82,6 +82,14 @@
           ],
           "subcommands": {}
         },
+        "heartbeat": {
+          "flags": [
+            "--help",
+            "--note",
+            "-h"
+          ],
+          "subcommands": {}
+        },
         "list": {
           "flags": [
             "--archived",
@@ -95,6 +103,75 @@
             "--step-key",
             "--tenant",
             "--workflow-template-id",
+            "-h"
+          ],
+          "subcommands": {}
+        },
+        "promote": {
+          "flags": [
+            "--dry-run",
+            "--help",
+            "--ids",
+            "--json",
+            "-h"
+          ],
+          "subcommands": {}
+        },
+        "reclaim": {
+          "flags": [
+            "--help",
+            "--reason",
+            "-h"
+          ],
+          "subcommands": {}
+        },
+        "reopen-review": {
+          "flags": [
+            "--help",
+            "--reason",
+            "-h"
+          ],
+          "subcommands": {}
+        },
+        "request-changes": {
+          "flags": [
+            "--help",
+            "-h"
+          ],
+          "subcommands": {}
+        },
+        "request-review": {
+          "flags": [
+            "--force",
+            "--help",
+            "--metadata",
+            "--reviewer",
+            "--summary",
+            "-h"
+          ],
+          "subcommands": {}
+        },
+        "runs": {
+          "flags": [
+            "--help",
+            "--json",
+            "--state-name",
+            "--state-type",
+            "-h"
+          ],
+          "subcommands": {}
+        },
+        "swarm": {
+          "flags": [
+            "--created-by",
+            "--help",
+            "--idempotency-key",
+            "--json",
+            "--priority",
+            "--synthesizer",
+            "--tenant",
+            "--verifier",
+            "--worker",
             "-h"
           ],
           "subcommands": {}

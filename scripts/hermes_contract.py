@@ -125,8 +125,15 @@ _INLINE_RE = re.compile(r"`([^`\n]+)`")
 def _document_command_strings(text):
     """Yield candidate command strings from inline code spans and fenced blocks."""
     for block in _FENCE_RE.findall(text):
-        for line in block.splitlines():
-            line = line.strip()
+        pending = ""
+        for raw_line in block.splitlines():
+            line = raw_line.strip()
+            if pending:
+                line = pending + " " + line
+                pending = ""
+            if line.rstrip().endswith("\\"):
+                pending = line.rstrip()[:-1].rstrip()
+                continue
             if line.startswith("$ "):
                 line = line[2:].strip()
             if line.startswith("hermes "):
@@ -141,10 +148,14 @@ def _document_command_strings(text):
 
 
 def _tokenize(command):
+    # Backslashes in documentation are shell line continuations, not CLI
+    # surface; dropping them keeps quoted prompts and values parseable.
+    command = command.replace("\\", " ").strip()
     try:
         return shlex.split(command, comments=False, posix=True)
     except ValueError:
-        return command.split()
+        # Unbalanced quotes in prose: fall back, but keep quoted runs together.
+        return re.findall(r"[^\s\"']+|\"[^\"]*\"|'[^']*'", command)
 
 
 def parse_citation(command):
@@ -176,6 +187,8 @@ _VALUE_FLAGS = frozenset({
     "--max-retries", "--completion-contract", "--idempotency-key", "--worker",
     "--verifier", "--synthesizer", "--assignee", "--goal", "--session",
     "--limit", "--name", "--path", "--profile", "--since", "--until",
+    "--usage-file", "--format", "--board", "--depends", "--reviewer",
+    "--summary", "--metadata", "--state-name", "--ids",
 })
 
 
@@ -321,7 +334,18 @@ def resolve(manifest, citation):
             if token not in node["flags"]:
                 context = "hermes" + (" " + " ".join(path) if path else "")
                 return "unknown flag(s) for '%s': %s" % (context, token)
-            index += 2 if token in _VALUE_FLAGS else 1
+            if token in _VALUE_FLAGS:
+                index += 2
+                continue
+            # Generic lookahead: a known flag followed by a bare non-subcommand
+            # token consumes that token as its value, so an unlisted value flag
+            # cannot masquerade as a command name.
+            following = tokens[index + 1] if index + 1 < len(tokens) else None
+            if (following is not None and not following.startswith("-")
+                    and following not in node["subcommands"]):
+                index += 2
+                continue
+            index += 1
             continue
 
         subcommands = node["subcommands"]

@@ -53,6 +53,11 @@ class RepositoryContractTests(unittest.TestCase):
         for relative_path in sorted(script_paths | reference_paths):
             self.assertTrue((REPO_ROOT / relative_path).is_file(), relative_path)
 
+        substrate = body.split("## Native Hermes Substrate", 1)[1].split("## Quick Start", 1)[0]
+        for primitive in ("kanban swarm", "--skill", "--completion-contract",
+                          "request-review", "background=True"):
+            self.assertIn(primitive, substrate)
+
         agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
         self.assertIn("bash -n scripts/*.sh", agents)
         self.assertIn("parse `templates/*.json`", agents)
