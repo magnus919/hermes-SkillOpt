@@ -50,20 +50,32 @@ This means: **do not evaluate skill changes by reading the skill.** Evaluate by 
 
 Training and validation task sets MUST be distinct. This is not optional.
 
-### Phase 0 — Description Audit (before first Rollout)
+### Phase 0 — Reachability and Description Audit (before first Rollout)
 
 Before running any rollouts, audit the target skill's `description` field. Per Schmid (Google DeepMind, AI Engineer 2026), **50% of skill failures trace to incorrect triggering from weak descriptions.** A skill whose body is perfectly optimized but whose description fails to trigger is invisible.
 
-**Checks:**
+**Load conditions come first.** A trigger-phrasing audit cannot catch a skill
+that Hermes never indexes. Read `metadata.hermes` and decide, per gate:
+satisfied, deliberately unsatisfied, or unknown (unknown is a finding, not a
+pass). The failure is silent: no error, no warning, just an agent that never
+loads it. In particular, `requires_toolsets` naming a toolset Hermes ships
+disabled by default (for example `kanban`) hides the skill on every stock
+install. Confirm the skill appears in the index a real session receives, not
+merely as an `enabled` row in the installed inventory.
+
+**Trigger checks:**
+
 1. **Imperative phrasing** — Does the description start with a directive verb ("Use", "Build", "Deploy")? Passive descriptions ("This skill does...") trigger less reliably.
 2. **Directives, not essays** — Is the description a directive ("Use the Interactions API if you're building a chat application") or an explanation ("The Interactions API is recommended for multi-chat because it handles session state")? Models follow directives; they infer implications from essays unreliably. Rewrite explanations as directives.
 3. **Negative boundaries** — Does it say when NOT to use the skill? Without negative boundaries, the skill over-triggers on near-miss prompts.
 4. **Trigger coverage** — Test 5 representative prompts that should trigger the skill and 5 near-miss prompts that should not. If trigger accuracy is below 80%, propose description edits alongside body edits.
 
-**Entry:** Target skill's `description` field
-**Exit:** Description audit result (pass/fail per check) + proposed description edits if needed
+**Entry:** Target skill tree (frontmatter gates + `description`) and the index a session actually receives
+**Exit:** Load-condition disposition per gate + description audit (pass/fail per check) + proposed edits if needed
 
 Description edits are proposed and validated through the same pipeline as body edits — they go through Propose, Validate, and Merge like any other change.
+
+**The tree is the unit of optimization.** Snapshot the whole skill directory, give baseline and candidate sibling roots with identical structure, and treat a new `references/` file as one edit spanning the file, its link from `SKILL.md`, and its reference-table row. After any edit, assert that every `references/...` path named in `SKILL.md` exists, and that every reference file is linked or recorded as intentionally unreferenced. See [references/load-conditions-and-skill-trees.md](references/load-conditions-and-skill-trees.md).
 
 ### The Six Phases
 
@@ -143,7 +155,7 @@ A full optimization run consists of 4 epochs by default. Each epoch follows the 
 - **Budget decay:** Cosine decay to a floor of 2 edits per epoch
 - **Epoch 4 or plateau:** Trigger the slow-meta phase
 
-The edit budget is configurable in `board-metadata.json` under `edit_budget`.
+The edit budget is configurable in `board-metadata.json` under `edit_budget`. For a knob users should be able to set without reading the source, declare it in `metadata.hermes.config` (resolving to `skills.config.<key>`); keep run-local mechanics in environment variables and document which wins. See [references/load-conditions-and-skill-trees.md](references/load-conditions-and-skill-trees.md).
 
 ## Native Hermes Substrate
 
@@ -238,6 +250,13 @@ The `seed-board.sh` triple-quote JSON bug was fixed in v1.1.0 (omnibus PR #12).
 | `references/artifact-pyramid-phase-outputs.md` | Unified pyramid structure, dossier naming conventions, `update_root_pyramid()`, backward compat with old-format directories |
 | `references/multi-skill-patterns.md` | Cross-cutting observations from a 3-skill SkillOpt session — the buried content trap, progressive disclosure, creative skill metrics, subject derivation priority |
 | `references/test-suite-design.md` | How to pick training and validation tasks |
+| `references/all-pass-baseline.md` | Worked acceptance criteria for the all-pass-at-baseline case, where validation measures regression only |
+| `references/tool-bugs-during-validation.md` | Separating a tool bug from a skill gap during validation, and what to fix first |
+| `references/board-slug-schema-compatibility.md` | Board-metadata `board_slug` schema versus the CLI's lowercase kebab-case slugs, and the compatible seeding path |
+| `references/trajectory-schema-enforcement.md` | Required trajectory record fields and when to enforce them before parent scoring |
+| `references/seed-board-python-workaround.md` | Seeding a board from Python when task content breaks the shell seeder's JSON quoting |
+| `references/dirty-worktree-publication.md` | Publishing a merged skill from a checkout with unrelated changes without inheriting its accidental scope |
+| `references/load-conditions-and-skill-trees.md` | Frontmatter load-condition audit, directory-level snapshots, progressive-disclosure link integrity, declared config vars, and slug-collision preflight |
 | `references/lifecycle-safety-and-cost.md` | Curator pinning, rollout approval posture, per-epoch cost evidence (`--usage-file`), and checkpoint-based recovery |
 | `references/native-orchestration-substrate.md` | Phase-to-primitive map for `kanban swarm`, `--skill`, completion contracts, runtime bounds, workspace isolation, and reconciliation |
 | `references/rollout-fidelity.md` | Evaluating the installed skill tree instead of a transcription — `--skills` preload, whole-directory candidates, and the negative control that proves references were read |
@@ -300,6 +319,8 @@ diff a candidate. See [references/lifecycle-safety-and-cost.md](references/lifec
 - **An expected failure can come from the wrong enforcement layer.** Matching an error code or rejection is not proof that the behavior under test caused it. Establish prerequisites and a positive control before scoring the negative case: for PostgreSQL RLS, grant the test role schema/table privileges and prove an authorized same-tenant operation succeeds before accepting `42501` as RLS evidence; otherwise ordinary relation-permission denial can create a false PASS. Apply the same causal check to authentication, network, parser, and policy tests: verify the request reached the intended gate, then verify that gate rejected it. If the trajectory cannot distinguish the causal layer, mark it failed rather than crediting a coincidental error.
 - **A validation trajectory must contain the full direct task response.** A textual review of whether the skill covers the rubric, or a summary containing only pass counts and self-scores, is infrastructure-invalid even when it sounds correct. Prefer having the worker return the direct user-facing answer while the orchestrator owns the dossier envelope and records task ID, delegation metadata, raw output, failure modes, and parent scoring. Use the five-key worker JSON contract only when an automated consumer genuinely requires it and the model has demonstrated reliable adherence. If one complete response is mechanically separable, preserve it unchanged and record the normalization boundary instead of rerunning solely for envelope or fence contamination; never reconstruct missing or truncated content. See [references/validation-trajectory-integrity.md](references/validation-trajectory-integrity.md).
 - **Verify root-pyramid completeness after every regeneration.** `update_root_pyramid()` can return successfully while its phase discovery omits dossiers whose filename has no hyphen after the phase name (for example, `epoch-N-reflection.json`). Compare every current `03-dossiers/epoch-N-*.json` file against the generated epoch overview; if anything is missing, retain the dossier as the source of truth and record the indexing gap before relying on the L1/L2 navigation.
+- **A loadable-looking skill can be unreachable.** `requires_toolsets` that names a toolset Hermes ships disabled by default (for example `kanban`) removes the skill from the index on every stock install, and nothing reports it: the skill row still says `enabled`. Audit gates in Phase 0 and confirm the skill appears in the session's actual index, not just the installed inventory.
+- **Single-file snapshots cannot represent a skill tree.** Copying only `SKILL.md` silently deletes `references/`, so baseline and candidate are not the artifact under test and relative links resolve differently in each. Snapshot directories, validate sibling roots, and after any edit assert that every reference path named in `SKILL.md` exists and every reference file is linked or explicitly recorded as unreferenced.
 - **Not separating training and validation sets.** The most common and most damaging mistake.
 - **Validating a candidate with a task that does not trigger its edit.** Before dispatching baseline or candidate workers, map every proposed edit to at least one held-out criterion. A task that lacks the condition the edit governs is infrastructure-invalid for that edit: replace it and rerun its baseline before candidate validation. Record the discarded trajectory and why; do not count a convenient pass as evidence.
 - **Skipping the validation gate.** The gate is the only thing preventing overfitting to the training batch.

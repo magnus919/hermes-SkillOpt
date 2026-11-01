@@ -22,6 +22,7 @@ The test shape is intentionally integration-heavy for a CLI tool. Unit tests pro
 5. The phase-chain smoke test reaches merge and proves the accepted edit is written to the target workspace.
 6. Seed and archive integration tests prove artifact preservation and safe handling of shell-active task text.
 7. Every `hermes ...` command cited in the documentation resolves against `contracts/hermes-cli-contract.json`.
+8. Every markdown link and every `## References` / `## Key Files` index entry resolves to a real file (`scripts/check_skill_tree.py`).
 
 A failure blocks the pull request. Tests must be deterministic and isolated. The workflow does not retry a failed test; a failure is investigated as a real failure unless a separate run demonstrates a flake.
 
@@ -38,6 +39,9 @@ python3 scripts/hermes_contract.py --refresh       # deliberate manifest update
 ```
 
 Refreshing the manifest is a reviewable act, not a fix for a failing test: if `--check-docs` fails, either the documentation is wrong or the CLI genuinely changed, and those need different responses.
+
+`check_skill_tree.py` checks index integrity only: markdown link targets, plus the backticked paths in `SKILL.md`'s `## References` and `AGENTS.md`'s `## Key Files`. Ill.
+ustrative paths inside pitfall prose (a worked example from another skill, a placeholder artifact path) are intentionally not links and are not checked. Unreferenced reference files are advisory; `--strict` makes them fatal.
 
 The manual preflight remains:
 
@@ -60,6 +64,7 @@ bash -n scripts/*.sh
 python3 -m compileall -q scripts tests
 python3 -m unittest discover -s tests -v
 python3 scripts/hermes_contract.py --check-docs
+python3 scripts/check_skill_tree.py
 python3 scripts/hermes_contract.py --verify-live   # when Hermes is installed
 ```
 

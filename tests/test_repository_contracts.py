@@ -28,6 +28,18 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertEqual(suite["properties"]["training"]["minItems"], 1)
         self.assertEqual(suite["properties"]["validation"]["minItems"], 1)
 
+    def test_skill_tree_links_resolve(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "check_skill_tree", REPO_ROOT / "scripts" / "check_skill_tree.py")
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        missing, orphans = module.check_tree(REPO_ROOT)
+        self.assertEqual(["%s -> %s (%s)" % (p.name, t, r) for p, t, r in missing], [])
+        self.assertEqual([p.name for p in orphans], [])
+
     def test_shell_entry_points_have_strict_mode_and_executable_bit(self) -> None:
         for script in sorted((REPO_ROOT / "scripts").glob("*.sh")):
             content = script.read_text(encoding="utf-8")
@@ -52,6 +64,10 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertTrue(reference_paths)
         for relative_path in sorted(script_paths | reference_paths):
             self.assertTrue((REPO_ROOT / relative_path).is_file(), relative_path)
+
+        phase0 = body.split("### Phase 0", 1)[1].split("### The Six Phases", 1)[0]
+        self.assertIn("requires_toolsets", phase0)
+        self.assertIn("references/load-conditions-and-skill-trees.md", phase0)
 
         substrate = body.split("## Native Hermes Substrate", 1)[1].split("## Quick Start", 1)[0]
         for primitive in ("kanban swarm", "--skill", "--completion-contract",
