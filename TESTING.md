@@ -51,6 +51,17 @@ hermes kanban --help
 hermes kanban boards --help
 ```
 
+## Automated review bot
+
+`droid-review.yml` posts an advisory review on PRs. It is not a blocking gate, and a green check is weaker evidence than it looks:
+
+- **PRs that change a workflow file are skipped by design.** The action refuses to run from a workflow that differs from the default branch. That PR merges unreviewed and later PRs are reviewed normally.
+- **The merged-PR/deleted-branch guard exits early** when a queued run outlives its PR. A green check there means "nothing to review," not "reviewed clean."
+- **Review depth is chosen from changed filenames, not contents.** `assess-depth` greps `gh pr diff --name-only`, so risky content inside an innocuously named file still yields `shallow`. Treat the tier as a hint, not a classification.
+- **Keep the action pinned to a release whose presets resolve at run time.** A pinned action that hardcodes model names breaks silently when the vendor retires one: the CLI exits during startup, the action's error channel renders empty, and the check turns red with no explanation. Presets based on tier aliases survive model retirements.
+
+Because a red or green check from this bot can both mean nothing happened, judge a review by whether it left a review comment on the PR. Absence of a comment is absence of evidence.
+
 ## Regression rules
 
 Every fixed runner defect gets a permanent regression test. New tests should be derived from behavior and artifact contracts rather than from the current implementation. Use boundary-value analysis for counts, epoch values, and slugification; equivalence partitions for valid and invalid task files; and state-transition coverage for the phase chain.
