@@ -286,6 +286,12 @@ Acceptance rule: reject any edit with lower `pass_rate` than baseline. If pass r
     "target": "/home/user/.hermes/skills/content/hugo-blog/SKILL.md",
     "final_epoch": 4,
     "archived_at": "2026-05-29T19:00:00Z",
-    "state_dir": "/home/user/.hermes/skillopt-runs/hugo-blog-20260529"
+    "state_dir": "/home/user/.hermes/skillopt-runs/hugo-blog-20260529",
+    "board_retention": "board retained - archive operation unavailable in installed CLI",
+    "deviations": [
+        "tracking cards skipped: sandbox guard blocked bulk creation in autonomous run; phase artifacts on disk are authoritative"
+    ]
 }
 ```
+
+`board_retention` and `deviations` are optional and carry free text. Record a lifecycle step that could not be performed (`archive` unavailable, cards blocked) here instead of claiming it succeeded or dropping it silently; an entry that names what was skipped and why is the evidence a later reader needs to reconstruct the run.
