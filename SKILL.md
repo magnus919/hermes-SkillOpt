@@ -106,7 +106,7 @@ Based on the reflection, propose 1-4 specific, targeted edits to the skill docum
 
 This is the heart of the methodology. Apply each proposed edit to a copy of the skill. Run the validation task suite with the edited skill. Compare against the baseline metrics. Accept edits that improve or maintain performance. Reject the rest.
 
-**Token efficiency is a secondary validation criterion.** Per Schmid's "always-paid context cost" insight, every token in a skill competes for context window space on every invocation. When comparing baseline and candidate, record token counts alongside pass rates. Accept edits that maintain pass rate while reducing token cost. Reject edits that improve pass rate by a marginal amount (≤2%) but increase token cost by >20%. A skill that passes all tasks at 2000 tokens is better than one that passes the same tasks at 5000 tokens — especially in multi-skill environments where every token in one skill competes with every other skill.
+**Token efficiency is a secondary validation criterion.** Per Schmid's "always-paid context cost" insight, every token in a skill competes for context window space on every invocation. When comparing baseline and candidate, record token counts alongside pass rates, sourced from `--usage-file` where the run produced it; an estimated count must be labeled as an estimate. Accept edits that maintain pass rate while reducing token cost. Reject edits that improve pass rate by a marginal amount (≤2%) but increase token cost by >20%. A skill that passes all tasks at 2000 tokens is better than one that passes the same tasks at 5000 tokens — especially in multi-skill environments where every token in one skill competes with every other skill.
 
 **Entry:** Proposed edits + validation task suite + baseline metrics
 **Exit:** Accepted edits (merged into deployment candidate) + rejected edits (stored in buffer with rationale and metrics) + validation dossiers at `03-dossiers/epoch-N-validation-edit-X.json` consumed by the root pyramid (`update_root_pyramid()` in `scripts/pyramid_utils.py`)
@@ -238,6 +238,7 @@ The `seed-board.sh` triple-quote JSON bug was fixed in v1.1.0 (omnibus PR #12).
 | `references/artifact-pyramid-phase-outputs.md` | Unified pyramid structure, dossier naming conventions, `update_root_pyramid()`, backward compat with old-format directories |
 | `references/multi-skill-patterns.md` | Cross-cutting observations from a 3-skill SkillOpt session — the buried content trap, progressive disclosure, creative skill metrics, subject derivation priority |
 | `references/test-suite-design.md` | How to pick training and validation tasks |
+| `references/lifecycle-safety-and-cost.md` | Curator pinning, rollout approval posture, per-epoch cost evidence (`--usage-file`), and checkpoint-based recovery |
 | `references/native-orchestration-substrate.md` | Phase-to-primitive map for `kanban swarm`, `--skill`, completion contracts, runtime bounds, workspace isolation, and reconciliation |
 | `references/rollout-fidelity.md` | Evaluating the installed skill tree instead of a transcription — `--skills` preload, whole-directory candidates, and the negative control that proves references were read |
 | `references/validation-trajectory-integrity.md` | Direct-execution output contract, infrastructure-invalid classifications, parent scoring, cleanup, and variance control |
@@ -257,6 +258,28 @@ The `seed-board.sh` triple-quote JSON bug was fixed in v1.1.0 (omnibus PR #12).
 | `references/cli-skill-preflight-audit.md` | Systematic audit for CLI/tool reference skills — cross-referencing against `--help` output and official docs before Rollout. Worked example: obsidian-cli coverage gap analysis (June 2026) |
 | `references/version-granularity-in-reference-tables.md` | Adding a version column to reference tables to surface per-feature minimum versions — prevents agents from trying unsupported features |
 | `references/greenfield-skill-optimization.md` | Optimizing a skill that was just created and has never been used — the baseline tells you nothing, so Epoch 1 tests prominence/discoverability and Epoch 2 pre-loads decision intelligence. Worked example from spec-driven-development v1.0→v1.1.0 |
+
+## Lifecycle Safety and Cost
+
+A run mutates a live skill for hours, so three controls are mandatory, not
+optional polish.
+
+- **Pin the target for the run.** `hermes curator pin <skill-name>` keeps the
+  background curator from consolidating or archiving the skill mid-epoch, which
+  would move the baseline under the trajectories. Unpin after merge is
+  committed; record the pin state in the run summary.
+- **Know your approval posture.** `hermes -z` bypasses approval prompts by
+  design. For rollouts that write, scope the write path with a worktree or
+  `dir:<path>` workspace, or run the task where approvals are enabled. Use
+  `hermes pause` only as a barrier against new dispatch, never as a rollback.
+- **Measure cost.** Pass `--usage-file <path>` to every `-z` rollout and record
+  the reported tokens, cost, model, and api_calls in the dossier. A
+  characters-divided-by-four estimate is a labeled fallback, not measurement.
+  Set the cost threshold before the epoch, not after an expensive pass.
+
+Recovery uses the checkpoint store that Hermes maintains
+(`hermes checkpoints status`); per-epoch snapshots remain the evidence used to
+diff a candidate. See [references/lifecycle-safety-and-cost.md](references/lifecycle-safety-and-cost.md).
 
 ## Design Principles
 
@@ -286,6 +309,8 @@ The `seed-board.sh` triple-quote JSON bug was fixed in v1.1.0 (omnibus PR #12).
 - **Leaf help must expose inherited safety flags.** A CLI may accept global options after a subcommand while `leaf --help` hides them, causing workers to falsely claim that dry-run, JSON output, confirmation, or bounds are unsupported. Probe the exact leaf help used in the task. If behavior exists but help omits it, fix the shared help contract, run the full tests, rebuild both baseline and candidate copies, and rerun paired validation before scoring the skill edit.
 - **Stale test assertions exposed by tool fixes:** After applying tool-bug fixes, run the full test suite before validation.
 - **Omnibus PR scope creep — verify each claimed issue is actually closed.** When a PR body claims to close multiple issues (e.g., `Closes #25, #26, #27, #28`), verify that the code actually addresses each one. A PR that refactors the infrastructure may declare the issues closed but leave the bash-level phase runners writing to old directories. After merge, check each issue individually — the PR body's claim is a plan, not a guarantee. If issues remain open, file a follow-up or extend the PR before merge.
+- **The curator can move the target under a running epoch.** A background curator pass that consolidates, archives, or edits the skill mid-run invalidates every trajectory scored against the pre-pass artifact. `hermes curator pin <skill-name>` before the baseline and unpin after merge; if the skill changed without a SkillOpt edit, treat the affected trajectories as infrastructure-invalid and rerun against a re-pinned baseline.
+- **`hermes -z` bypasses approvals, so a rollout can write unsupervised.** The flag exists for scripts and pipes. Scope writes with a worktree or `dir:<path>` workspace, or keep the task where approvals apply. Report the approval posture in the run summary rather than implying every rollout was gated.
 - **Rollout subagents can go off-skill.** Frame training tasks as "using ONLY the skill content" to prevent source code drift.
 - **Late delegation results can invalidate a provisional fallback.** A local deterministic fallback may finish before `delegate_task` workers return. Keep the epoch provisional until every dispatched worker has returned or been explicitly marked failed; if late trajectories arrive, record them and revise the reflection/validation artifacts before final reporting. Dispatch batches with `background=True` and settle them with `action="list"`/`steer`/`stop`; on a board, read `hermes kanban runs <task_id>` and `heartbeat` instead of inferring worker state from chat.
 - **Edit ordering matters when edits overlap in location.** Check whether a replace-type edit's old_string includes territory an add-type edit modifies.
