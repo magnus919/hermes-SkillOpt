@@ -83,7 +83,7 @@ class ResolutionTests(unittest.TestCase):
     MANIFEST = {
         "schema": 1,
         "hermes_version": "test",
-        "global_flags": ["-z", "--oneshot", "--skills", "--help", "-h"],
+        "global_flags": ["-z", "--oneshot", "--skills", "--usage-file", "--help", "-h"],
         "commands": {
             "kanban": {
                 "flags": ["--board"],
@@ -118,6 +118,11 @@ class ResolutionTests(unittest.TestCase):
 
     def test_accepts_interleaved_parent_flag(self):
         citation = hc.parse_citation("hermes kanban --board demo list")
+        self.assertIsNone(hc.resolve(self.MANIFEST, citation))
+
+    def test_flag_value_is_not_mistaken_for_a_command(self):
+        citation = hc.parse_citation(
+            "hermes -z \"run task T3\" --usage-file epoch/t3.json")
         self.assertIsNone(hc.resolve(self.MANIFEST, citation))
 
     def test_accepts_global_flag_citation(self):
