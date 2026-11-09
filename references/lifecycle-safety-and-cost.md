@@ -31,13 +31,15 @@ infrastructure-invalid and rerun them against a re-pinned baseline.
 
 `hermes -z` does not reliably bypass approval prompts: on a stock Linux install a
 write approval with no TTY blocked the run until timeout (2026-11-09). Pass
-`--yolo` for unattended rollouts, and treat that as writing without a gate. Choose the strongest control that still measures the skill:
+`--yolo` for unattended rollouts, and treat that as writing without a gate.
+`--in` changes the working directory; a worktree or `dir:<path>` does not
+restrict filesystem access. Choose the strongest control that still measures the skill:
 
 | Situation | Control |
 |---|---|
 | Rollout only reads and reasons | default `-z` in a disposable directory |
-| Rollout writes, but the skill under test is the only intended target | worktree or `dir:<path>` workspace, plus a task that names the permitted write path |
-| A write outside the sandbox would be damaging | do not use `-z`; run the task in an interactive/board worker with approvals enabled, or accept a declared limitation |
+| Rollout writes, but the skill under test is the only intended target | worktree or `dir:<path>` workspace, plus a task that names the intended write path; this is guidance, not enforcement |
+| A write outside the workspace would be damaging | use a container/VM with only disposable paths mounted, or run an interactive worker with approvals enabled; do not rely on `--in` or `--yolo` as a sandbox |
 | The user needs everything to stop | `hermes pause` |
 
 `hermes pause` halts new cron dispatch, kanban dispatch, and gateway turns. It
