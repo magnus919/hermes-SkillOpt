@@ -29,9 +29,9 @@ infrastructure-invalid and rerun them against a re-pinned baseline.
 
 ## 2. Supervise what rollouts are allowed to do
 
-`hermes -z` bypasses approval prompts by design, because it exists for scripts
-and pipes. A rollout that inherits it can write to unapproved paths without a
-gate. Choose the strongest control that still measures the skill:
+`hermes -z` does not reliably bypass approval prompts: on a stock Linux install a
+write approval with no TTY blocked the run until timeout (2026-11-09). Pass
+`--yolo` for unattended rollouts, and treat that as writing without a gate. Choose the strongest control that still measures the skill:
 
 | Situation | Control |
 |---|---|

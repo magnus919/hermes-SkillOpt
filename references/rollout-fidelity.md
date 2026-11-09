@@ -25,8 +25,9 @@ hermes -z "Capture the article at <url> into the vault. Report only the artifact
 
 `--skills` preloads the named skill for the session (repeatable or
 comma-separated). Combined with `--usage-file <path>`, this gives a
-per-trajectory cost record alongside the outcome. `-z` bypasses approval
-prompts, so it belongs only in a sandboxed or explicitly authorized task.
+per-trajectory cost record alongside the outcome. `-z` alone may still stop at an
+approval prompt with no TTY; add `--yolo` for unattended runs, and treat that as
+writing without a gate - it belongs only in a sandboxed or explicitly authorized task.
 
 For a board worker, bind the skill to the card instead:
 

@@ -93,7 +93,9 @@ hermes_cmd = os.environ.get("HERMES_CMD", "hermes")
 prompt_file = os.environ["PROMPT_FILE"]
 with open(prompt_file, encoding="utf-8") as f:
     prompt = f.read()
-cmd = shlex.split(hermes_cmd) + ["-z", prompt]
+# Unattended: without --yolo a write approval has no TTY and the phase blocks
+# until timeout (reproduced on a Linux VPS, 2026-11-09).
+cmd = shlex.split(hermes_cmd) + ["-z", prompt, "--yolo"]
 completed = subprocess.run(cmd, text=True)
 sys.exit(completed.returncode)
 PYEOF

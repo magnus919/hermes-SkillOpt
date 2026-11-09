@@ -299,8 +299,9 @@ optional polish.
   background curator from consolidating or archiving the skill mid-epoch, which
   would move the baseline under the trajectories. Unpin after merge is
   committed; record the pin state in the run summary.
-- **Know your approval posture.** `hermes -z` bypasses approval prompts by
-  design. For rollouts that write, scope the write path with a worktree or
+- **Know your approval posture.** `hermes -z` does not reliably bypass approval
+  prompts: pass `--yolo` for unattended rollouts, which means writing without a
+  gate. For rollouts that write, scope the write path with a worktree or
   `dir:<path>` workspace, or run the task where approvals are enabled. Use
   `hermes pause` only as a barrier against new dispatch, never as a rollback.
 - **Measure cost.** Pass `--usage-file <path>` to every `-z` rollout and record
@@ -351,7 +352,7 @@ diff a candidate. See [references/lifecycle-safety-and-cost.md](references/lifec
 - **Stale test assertions exposed by tool fixes:** After applying tool-bug fixes, run the full test suite before validation.
 - **Omnibus PR scope creep — verify each claimed issue is actually closed.** When a PR body claims to close multiple issues (e.g., `Closes #25, #26, #27, #28`), verify that the code actually addresses each one. A PR that refactors the infrastructure may declare the issues closed but leave the bash-level phase runners writing to old directories. After merge, check each issue individually — the PR body's claim is a plan, not a guarantee. If issues remain open, file a follow-up or extend the PR before merge.
 - **The curator can move the target under a running epoch.** A background curator pass that consolidates, archives, or edits the skill mid-run invalidates every trajectory scored against the pre-pass artifact. `hermes curator pin <skill-name>` before the baseline and unpin after merge; if the skill changed without a SkillOpt edit, treat the affected trajectories as infrastructure-invalid and rerun against a re-pinned baseline.
-- **`hermes -z` bypasses approvals, so a rollout can write unsupervised.** The flag exists for scripts and pipes. Scope writes with a worktree or `dir:<path>` workspace, or keep the task where approvals apply. Report the approval posture in the run summary rather than implying every rollout was gated.
+- **`hermes -z` does NOT reliably bypass approvals.** It did not on a stock Linux install: a write approval with no TTY blocked the run until timeout. Pass `--yolo` for unattended rollouts (the flag exists for scripts and pipes) and then scope writes with a worktree or `dir:<path>` workspace. Scope writes with a worktree or `dir:<path>` workspace, or keep the task where approvals apply. Report the approval posture in the run summary rather than implying every rollout was gated.
 - **Rollout subagents can go off-skill.** Frame training tasks as "using ONLY the skill content" to prevent source code drift.
 - **Late delegation results can invalidate a provisional fallback.** A local deterministic fallback may finish before `delegate_task` workers return. Keep the epoch provisional until every dispatched worker has returned or been explicitly marked failed; if late trajectories arrive, record them and revise the reflection/validation artifacts before final reporting. Dispatch batches with `background=True` and settle them with `action="list"`/`steer`/`stop`; on a board, read `hermes kanban runs <task_id>` and `heartbeat` instead of inferring worker state from chat.
 - **Edit ordering matters when edits overlap in location.** Check whether a replace-type edit's old_string includes territory an add-type edit modifies.
