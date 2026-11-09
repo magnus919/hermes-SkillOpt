@@ -96,7 +96,7 @@ The target LLM (any model you'd normally use with Hermes) executes a set of trai
 
 Review the rollout trajectories in a batch. Identify what went wrong, under what conditions, and what kind of change would address those failures. Batching prevents overfitting to any single failure mode.
 
-**Ablation baseline comparison.** When feasible, include 1-2 rollout tasks run WITHOUT the skill (bare model, no skill loaded). Compare the skill-on trajectories against the skill-off trajectories for the same tasks. Instructions that produce identical behavior with and without the skill are candidates for removal or compression — they are not earning their context cost. This is not a retirement signal (the skill may be essential on other models or harnesses); it is an improvement signal that identifies dead-weight instructions within the skill. Record the ablation comparison in the reflection document alongside the failure patterns.
+**Ablation baseline comparison.** When feasible, include 1-2 rollout tasks run with the skill genuinely unavailable. Omitting `--skills` is NOT an ablation on Hermes: the skill stays in the index and the model loads it anyway, so the two arms converge and the epoch reports false no-headroom. Hide the skill (temporarily move its directory out of the skills tree, or disable it), run the arm, then restore it — and record how the skill was removed in the reflection dossier. Compare the skill-on trajectories against the skill-off trajectories for the same tasks. Instructions that produce identical behavior with and without the skill are candidates for removal or compression — they are not earning their context cost. This is not a retirement signal (the skill may be essential on other models or harnesses); it is an improvement signal that identifies dead-weight instructions within the skill. Record the ablation comparison in the reflection document alongside the failure patterns.
 
 **Entry:** Trajectory records from Phase 1 (+ optional ablation baseline)
 **Exit:** Reflection document with identified failure patterns categorized by frequency and severity, plus ablation observations (which instructions changed behavior vs. which did not)
@@ -233,6 +233,16 @@ The primary interface for SkillOpt is conversational — your agent drives the p
 
 - **Rollouts:** `delegate_task` for each training task (handles multi-line instructions correctly, runs in parallel, captures full output). The shell script's `--exec` mode frequently returns 0 records written because `hermes -z` failures are silently swallowed by `2>/dev/null`.
 - **Reflect:** Write the reflection JSON directly from rollout records. The shell script's `hermes -z` reflection prompt often returns `{"error": "execution failed"}` without useful diagnostics.
+- **Set `SKILLOPT_DIR` explicitly and keep it out of the skills tree.** The
+  seeder's default (`$HOME/.hermes/SkillOpt`) assumes a default Hermes home;
+  when the install lives elsewhere (a non-default `HERMES_HOME`, a Windows
+  `AppData` home) run state lands outside the profile the agent actually uses.
+  Export an absolute path next to the real home, not under `skills/`, so the
+  run artifacts are never indexed as skill content.
+- **Point `TMPDIR` at a native path before seeding on git-bash/MSYS.** The
+  seeder writes task JSON through `mktemp` and hands it to a native `python3`,
+  which cannot open an MSYS `/tmp/...` path — seeding aborts with
+  `FileNotFoundError`. Export `TMPDIR` as a `C:/...` style directory first.
 - **Seed flags:** `seed-board.sh` uses `--train-tasks-file` and `--val-tasks-file` (not `--test-suite`). Task files must be plain JSON arrays, not objects with a `tasks` key. Kanban's `--board` is a global option and must precede the subcommand: `hermes kanban --board skillopt-<name> create ...`, not `hermes kanban create ... --board ...`. Do not trust a board switch alone: verify with `hermes kanban --board skillopt-<name> list` and `boards list` counts before creating tasks. `boards show` reports the process-wide active board and is not evidence that a `--board`-scoped operation targeted the intended board.
 - **Pyramid utils:** When calling `update_root_pyramid()` outside the PYEOF blocks, set `PYTHONPATH` to the skillopt `scripts/` directory using its absolute path: `PYTHONPATH="/Users/magnus/.hermes/skills/skillopt/scripts:$PYTHONPATH"`. The `dirname "$0"` approach may not resolve correctly from python3 heredocs.
 
@@ -259,7 +269,7 @@ The `seed-board.sh` triple-quote JSON bug was fixed in v1.1.0 (omnibus PR #12).
 | `references/seed-board-python-workaround.md` | Seeding a board from Python when task content breaks the shell seeder's JSON quoting |
 | `references/dirty-worktree-publication.md` | Publishing a merged skill from a checkout with unrelated changes without inheriting its accidental scope |
 | `references/load-conditions-and-skill-trees.md` | Frontmatter load-condition audit, directory-level snapshots, progressive-disclosure link integrity, declared config vars, and slug-collision preflight |
-| `references/lifecycle-safety-and-cost.md` | Curator pinning, rollout approval posture, per-epoch cost evidence (`--usage-file`), and checkpoint-based recovery |
+| `references/lifecycle-safety-and-cost.md` | Curator pinning, memory/context-plugin isolation for rollouts, approval posture, per-epoch cost evidence (`--usage-file`), and checkpoint-based recovery |
 | `references/native-orchestration-substrate.md` | Phase-to-primitive map for `kanban swarm`, `--skill`, completion contracts, runtime bounds, workspace isolation, and reconciliation |
 | `references/rollout-fidelity.md` | Evaluating the installed skill tree instead of a transcription — `--skills` preload, whole-directory candidates, and the negative control that proves references were read |
 | `references/validation-trajectory-integrity.md` | Direct-execution output contract, infrastructure-invalid classifications, parent scoring, cleanup, and variance control |
@@ -297,6 +307,14 @@ optional polish.
   the reported tokens, cost, model, and api_calls in the dossier. A
   characters-divided-by-four estimate is a labeled fallback, not measurement.
   Set the cost threshold before the epoch, not after an expensive pass.
+- **Isolate the harness from memory and context plugins.** A rollout is scored
+  on the whole prompt, so an external memory provider or context engine adds
+  fixed tokens to every trajectory and can change behavior the skill does not
+  govern. Add `--ignore-rules` to `-z` rollouts (it disables the memory
+  provider while explicit `--skills` preloads still load); delegated rollouts
+  have no per-call flag, so isolate the profile instead. Record the harness
+  posture next to the approval posture. See
+  [references/lifecycle-safety-and-cost.md](references/lifecycle-safety-and-cost.md).
 
 Recovery uses the checkpoint store that Hermes maintains
 (`hermes checkpoints status`); per-epoch snapshots remain the evidence used to
@@ -439,7 +457,7 @@ diff a candidate. See [references/lifecycle-safety-and-cost.md](references/lifec
 - **Archive is a verified lifecycle transition, not a helper-script message.** Before finalization, inspect `hermes kanban boards --help` and use only lifecycle operations that the installed CLI exposes. Verify the resulting board state directly. If archiving is unavailable, retain the completed board, write `run-summary.json` in the durable state directory, and report that retention explicitly. Never claim a board was archived merely because a wrapper printed success; report the mismatch upstream before changing the helper.
 
 - **Integration-boundary validation must use the user's real invocation, not only a component fixture.** For skills that describe file discovery or default loading, validate the complete candidate directory with the same invocation a user will run. Docker Compose is the worked example: validating `-f compose.yaml` passed while the default directory invocation auto-loaded `compose.override.yaml`, which reintroduced a profiled core service. Candidate copies must include all companion files, and validation must exercise both explicit and default file discovery. The same rule applies to config loaders, plugin registries, and generated artifact pipelines.
-- **"Board seeded but rollouts never executed" — detecting an incomplete initialization.** A kanban board can exist (slug registered in `hermes kanban boards list`), the state directory can have `board-metadata.json` and `test-suite.json`, and still no tasks may be on the kanban and no rollouts in `rollouts/`. This happens when the Seed phase completed (wrote metadata + test suite + baseline snapshot) but the Rollout phase (dispatch `delegate_task` for each training item) was never started — typically because the session ended, the agent hit a rate limit, or the orchestrator pivoted before dispatching. **Detection pattern:** when resuming work on a SkillOpt board, run a quick preflight before assuming the rollout has been done: check `hermes kanban list --board <slug>` for the empty/ready task state, check `ls rollouts/` for output files, and check session history for `delegate_task` calls targeting the board's training task IDs. If the board is empty and no rollout files exist, the board is in the pre-Rollout state — proceed directly to Rollout (Phase 1), not to Reflect (Phase 2). **The empty kanban board is not a bug — it is the signal that the first pipeline phase has not been entered yet.** Do not interpret it as stalled-in-progress; interpret it as freshly-seeded-and-waiting. The llamaindex SkillOpt board (2026-07-09) is the worked example: all state artifacts present, kanban board empty, rollouts/ empty — confirmed as pre-Rollout.
+- **"Board seeded but rollouts never executed" — detecting an incomplete initialization.** A kanban board can exist (slug registered in `hermes kanban boards list`), the state directory can have `board-metadata.json` and `test-suite.json`, and still no tasks may be on the kanban and no rollouts in `rollouts/`. This happens when the Seed phase completed (wrote metadata + test suite + baseline snapshot) but the Rollout phase (dispatch `delegate_task` for each training item) was never started — typically because the session ended, the agent hit a rate limit, or the orchestrator pivoted before dispatching. **Detection pattern:** when resuming work on a SkillOpt board, run a quick preflight before assuming the rollout has been done: check `hermes kanban --board <slug> list` for the empty/ready task state, check `ls rollouts/` for output files, and check session history for `delegate_task` calls targeting the board's training task IDs. If the board is empty and no rollout files exist, the board is in the pre-Rollout state — proceed directly to Rollout (Phase 1), not to Reflect (Phase 2). **The empty kanban board is not a bug — it is the signal that the first pipeline phase has not been entered yet.** Do not interpret it as stalled-in-progress; interpret it as freshly-seeded-and-waiting. The llamaindex SkillOpt board (2026-07-09) is the worked example: all state artifacts present, kanban board empty, rollouts/ empty — confirmed as pre-Rollout.
 
 ## Attribution
 
