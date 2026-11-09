@@ -12,7 +12,7 @@ set -euo pipefail
 # exact command the user/agent should run. With --exec, the script
 # attempts to execute the phase using hermes -z/--oneshot.
 
-SKILLOPT_DIR="${SKILLOPT_DIR:-$HOME/.hermes/SkillOpt}"
+SKILLOPT_DIR="${SKILLOPT_DIR:-${HERMES_HOME:-$HOME/.hermes}/SkillOpt}"
 HERMES="${HERMES:-hermes}"
 ERROR_LOG="${SKILLOPT_DIR}/hermes-oneshot-errors.log"
 
@@ -33,6 +33,18 @@ while [[ -L "$RUN_PHASE_SOURCE" ]]; do
 done
 SCRIPTS_DIR="$(cd -P "$(dirname "$RUN_PHASE_SOURCE")" && pwd)"
 unset RUN_PHASE_SOURCE RUN_PHASE_LINKS RUN_PHASE_DIR
+
+# Native (mixed) path form for PYTHONPATH. Under git-bash SCRIPTS_DIR is an MSYS
+# path (/c/...); a native python3 cannot import from that and PYTHONPATH drops it
+# silently -> ModuleNotFoundError: pyramid_utils.
+to_native_path() {
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -m "$1"
+    else
+        printf '%s' "$1"
+    fi
+}
+SCRIPTS_DIR_NATIVE="$(to_native_path "$SCRIPTS_DIR")"
 
 
 # Cosine-decayed edit budget computation.
@@ -66,7 +78,10 @@ run_hermes_prompt() {
     # Use shlex splitting so HERMES may be either a bare executable path or a
     # command with fixed args, e.g. HERMES='hermes --provider openai-codex -m gpt-5.5'.
     local prompt_file
-    prompt_file=$(mktemp)
+    # Native python3 cannot open an MSYS /tmp path under git-bash/Windows; keep
+    # temp files inside the state dir so both shells and Python resolve them.
+    mkdir -p "$SKILLOPT_DIR"
+    prompt_file=$(mktemp "$SKILLOPT_DIR/.skillopt-tmp.XXXXXX")
     printf '%s' "$1" > "$prompt_file"
 
     local status
@@ -278,8 +293,8 @@ print(f'    Wrote: {output_file}')
             cp "$rf" "$rdest"
         done
         shopt -u nullglob
-        SCRIPTS_DIR="$SCRIPTS_DIR" \
-        PYTHONPATH="$SCRIPTS_DIR" \
+        SCRIPTS_DIR="$SCRIPTS_DIR_NATIVE" \
+        PYTHONPATH="$SCRIPTS_DIR_NATIVE" \
             EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
 import os, sys
 trusted_scripts = os.environ["SCRIPTS_DIR"]
@@ -558,8 +573,8 @@ print(f'  Reflection written: $reflect_dir/epoch-$EPOCH.json')
 "
         # Copy reflection to unified pyramid and regenerate root files
         cp "$reflect_dir/epoch-$EPOCH.json" "$STATE_DIR/03-dossiers/epoch-$EPOCH-reflection.json"
-        SCRIPTS_DIR="$SCRIPTS_DIR" \
-        PYTHONPATH="$SCRIPTS_DIR" \
+        SCRIPTS_DIR="$SCRIPTS_DIR_NATIVE" \
+        PYTHONPATH="$SCRIPTS_DIR_NATIVE" \
             EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
 import os, sys
 trusted_scripts = os.environ["SCRIPTS_DIR"]
@@ -652,8 +667,8 @@ print(f'  Proposals written: $proposal_dir/epoch-$EPOCH.json ({len(proposals)} e
 "
         # Copy proposals to unified pyramid and regenerate root files
         cp "$proposal_dir/epoch-$EPOCH.json" "$STATE_DIR/03-dossiers/epoch-$EPOCH-proposals.json"
-        SCRIPTS_DIR="$SCRIPTS_DIR" \
-        PYTHONPATH="$SCRIPTS_DIR" \
+        SCRIPTS_DIR="$SCRIPTS_DIR_NATIVE" \
+        PYTHONPATH="$SCRIPTS_DIR_NATIVE" \
             EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
 import os, sys
 trusted_scripts = os.environ["SCRIPTS_DIR"]
@@ -824,8 +839,8 @@ run_validate() {
 
         # For each proposal, apply it to an in-memory copy of the skill,
         # run held-out validation tasks, and compare against stored baseline.
-        SCRIPTS_DIR="$SCRIPTS_DIR" \
-        PYTHONPATH="$SCRIPTS_DIR" \
+        SCRIPTS_DIR="$SCRIPTS_DIR_NATIVE" \
+        PYTHONPATH="$SCRIPTS_DIR_NATIVE" \
         EPOCH="$EPOCH" \
         TARGET_PATH="$TARGET" \
         PROPOSAL_FILE="$proposal_file" \
@@ -1745,6 +1760,11 @@ snapshot = os.path.join(snapshots_dir, f"pre-merge-epoch-{epoch}-{timestamp}.md"
 with open(snapshot, "w", encoding="utf-8") as f:
     f.write(skill)
 
+# The tree is the artifact under test: keep a full directory copy too, or a
+# rollback restores SKILL.md and silently drops references/ and scripts/.
+tree_snapshot = os.path.join(snapshots_dir, f"tree-pre-merge-epoch-{epoch}-{timestamp}")
+shutil.copytree(os.path.dirname(target), tree_snapshot, dirs_exist_ok=True)
+
 proposal_file = os.path.join(state_dir, "proposals", f"epoch-{epoch}.json")
 proposals = load_json(proposal_file)
 proposals_by_id = {p.get("id"): p for p in proposals.get("proposals", [])}
@@ -2210,8 +2230,8 @@ print(f'  Recommendation: {rec}')
 "
         # Copy slow-meta to unified pyramid and regenerate root files
         cp "$reflect_dir/slow-meta-epoch-$EPOCH.json" "$STATE_DIR/03-dossiers/epoch-$EPOCH-slowmeta.json"
-        SCRIPTS_DIR="$SCRIPTS_DIR" \
-        PYTHONPATH="$SCRIPTS_DIR" \
+        SCRIPTS_DIR="$SCRIPTS_DIR_NATIVE" \
+        PYTHONPATH="$SCRIPTS_DIR_NATIVE" \
             EPOCH="$EPOCH" STATE_DIR="$STATE_DIR" python3 << 'PYEOF'
 import os, sys
 trusted_scripts = os.environ["SCRIPTS_DIR"]

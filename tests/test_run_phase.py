@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+
+from tests.support import bash_exe, hermes_cmd, sh_path
 import stat
 import subprocess
 import tempfile
@@ -21,7 +23,7 @@ class RunPhaseTests(unittest.TestCase):
 
         for script in sorted(SCRIPTS_DIR.glob("*.sh")):
             result = subprocess.run(
-                ["bash", "-n", str(script)],
+                [bash_exe(), "-n", sh_path(script)],
                 capture_output=True,
                 text=True,
             )
@@ -30,6 +32,7 @@ class RunPhaseTests(unittest.TestCase):
 
         self.assertFalse(failures, "\n".join(failures))
 
+    @unittest.skipIf(os.name == "nt", "symlink creation needs Developer Mode on Windows")
     def test_reflect_aggregates_rollouts_into_hermes_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp_path = Path(temp_dir)
@@ -106,16 +109,16 @@ class RunPhaseTests(unittest.TestCase):
             env.pop("PYTHONPATH", None)
             env.update(
                 {
-                    "SKILLOPT_DIR": str(skillopt_dir),
-                    "HERMES": str(hermes_stub),
-                    "CAPTURED_PROMPT": str(captured_prompt),
+                    "SKILLOPT_DIR": sh_path(skillopt_dir),
+                    "HERMES": hermes_cmd(hermes_stub),
+                    "CAPTURED_PROMPT": sh_path(captured_prompt),
                 }
             )
 
             result = subprocess.run(
                 [
-                    "bash",
-                    str(runner_link),
+                    bash_exe(),
+                    sh_path(runner_link),
                     "--board",
                     "skillopt-demo",
                     "--phase",

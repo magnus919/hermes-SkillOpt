@@ -15,8 +15,19 @@ set -euo pipefail
 # If --*-tasks-file is provided, those tasks are loaded into the board.
 # If omitted, generic task placeholders are created.
 
-SKILLOPT_DIR="${SKILLOPT_DIR:-$HOME/.hermes/SkillOpt}"
+# State home defaults to the real Hermes home: on Windows HERMES_HOME is not
+# ~/.hermes, so the old default wrote run state outside the installation.
+SKILLOPT_DIR="${SKILLOPT_DIR:-${HERMES_HOME:-$HOME/.hermes}/SkillOpt}"
 HERMES="${HERMES:-hermes}"
+
+# Temp files must sit on a path the NATIVE python3 can open. Under git-bash/MSYS
+# `mktemp` returns /tmp/tmp.XXXX, which Windows Python rejects with
+# "No such file or directory". Create them inside the state dir instead.
+make_tmp() {
+    local dir="${SKILLOPT_DIR:-$HOME}"
+    mkdir -p "$dir"
+    mktemp "$dir/.skillopt-tmp.XXXXXX"
+}
 
 show_usage() {
     sed -n '3,18p' "$0"
@@ -131,8 +142,17 @@ validate_positive_count "validation" "$VALIDATION_COUNT"
 
 mkdir -p "$SKILLOPT_DIR/$SKILL_SLUG"/{rollouts,reflections,proposals,validation-results,snapshots}
 
-SNAPSHOT_FILE="baseline-$(date +%Y%m%d-%H%M%S).md"
+SNAPSHOT_STAMP="$(date +%Y%m%d-%H%M%S)"
+SNAPSHOT_FILE="baseline-${SNAPSHOT_STAMP}.md"
 cp "$TARGET" "$SKILLOPT_DIR/$SKILL_SLUG/snapshots/$SNAPSHOT_FILE"
+
+# The tree is the unit of optimization (see SKILL.md "Single-file snapshots
+# cannot represent a skill tree"): a SKILL.md-only copy silently drops
+# references/ and scripts/, so baseline and candidate stop being the artifact
+# under test. Snapshot the whole directory alongside the legacy single file.
+SNAPSHOT_TREE="tree-baseline-${SNAPSHOT_STAMP}"
+mkdir -p "$SKILLOPT_DIR/$SKILL_SLUG/snapshots/$SNAPSHOT_TREE"
+cp -R "$(dirname "$TARGET")/." "$SKILLOPT_DIR/$SKILL_SLUG/snapshots/$SNAPSHOT_TREE/"
 
 # Write test suite definition
 TEST_SUITE_FILE="$SKILLOPT_DIR/$SKILL_SLUG/test-suite.json"
@@ -168,8 +188,8 @@ fi
 # Write test suite definition — pass data via temp files/environment so task
 # descriptions containing quotes, backticks, $(), or triple-quotes cannot break
 # shell or Python parsing.
-tmp_train=$(mktemp)
-tmp_val=$(mktemp)
+tmp_train=$(make_tmp)
+tmp_val=$(make_tmp)
 echo "$TRAIN_TASKS" > "$tmp_train"
 echo "$VAL_TASKS" > "$tmp_val"
 
@@ -220,6 +240,7 @@ cat > "$SKILLOPT_DIR/$SKILL_SLUG/board-metadata.json" << EOF
     "epoch": 1,
     "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
     "baseline_snapshot": "$SNAPSHOT_FILE",
+    "baseline_tree": "$SNAPSHOT_TREE",
     "status": "active"
 }
 EOF
@@ -252,7 +273,7 @@ for i, task in enumerate(tasks):
     CURRENT_TASK=$(TASK_B64="$encoded_task" python3 -c "import base64,json,os; print(json.loads(base64.b64decode(os.environ['TASK_B64']))['id'])")
     DESC=$(TASK_B64="$encoded_task" python3 -c "import base64,json,os; print(json.loads(base64.b64decode(os.environ['TASK_B64']))['instruction'])")
 
-    body_file=$(mktemp)
+    body_file=$(make_tmp)
     cat > "$body_file" << BODYEOF
 Rollout task ${CURRENT_TASK} for '${SKILL_NAME}' (epoch 1).
 
@@ -287,6 +308,7 @@ echo ""
 echo "Board created: $BOARD_SLUG"
 echo "State directory: $SKILLOPT_DIR/$SKILL_SLUG/"
 echo "Baseline snapshot: $SNAPSHOT_FILE"
+echo "Baseline tree:     snapshots/$SNAPSHOT_TREE/"
 echo "Test suite: $TEST_SUITE_FILE"
 echo ""
 echo "Switch to the board:"

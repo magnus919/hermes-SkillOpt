@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import re
 import unittest
@@ -45,7 +46,8 @@ class RepositoryContractTests(unittest.TestCase):
             content = script.read_text(encoding="utf-8")
             self.assertTrue(content.startswith("#!/usr/bin/env bash"), script)
             self.assertIn("set -euo pipefail", content, script)
-            self.assertTrue(script.stat().st_mode & 0o111, script)
+            if os.name != "nt":  # Windows checkouts carry no POSIX exec bit
+                self.assertTrue(script.stat().st_mode & 0o111, script)
 
     def test_skill_document_has_lifecycle_and_resolvable_catalogs(self) -> None:
         skill = (REPO_ROOT / "SKILL.md").read_text(encoding="utf-8")

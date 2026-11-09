@@ -9,7 +9,7 @@ set -euo pipefail
 # Normally cleans up the kanban board but preserves state directory.
 # Use --keep-state to preserve the board for review.
 
-SKILLOPT_DIR="${SKILLOPT_DIR:-$HOME/.hermes/SkillOpt}"
+SKILLOPT_DIR="${SKILLOPT_DIR:-${HERMES_HOME:-$HOME/.hermes}/SkillOpt}"
 HERMES="${HERMES:-hermes}"
 
 show_usage() {

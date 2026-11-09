@@ -8,6 +8,8 @@ import subprocess
 import tempfile
 import unittest
 
+from tests.support import bash_exe, hermes_cmd, sh_path
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUN_PHASE = REPO_ROOT / "scripts" / "run-phase.sh"
@@ -87,13 +89,13 @@ print(json.dumps(result))
 
             env = os.environ.copy()
             env.pop("PYTHONPATH", None)
-            env.update({"SKILLOPT_DIR": str(skillopt_dir), "HERMES": str(stub)})
+            env.update({"SKILLOPT_DIR": sh_path(skillopt_dir), "HERMES": hermes_cmd(stub)})
 
             for phase in ("rollout", "reflect", "propose", "validate", "merge"):
                 result = subprocess.run(
                     [
-                        "bash",
-                        str(RUN_PHASE),
+                        bash_exe(),
+                        sh_path(RUN_PHASE),
                         "--board",
                         "skillopt-smoke",
                         "--phase",
